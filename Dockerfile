@@ -25,7 +25,11 @@ WORKDIR /app
 
 # Install Python deps
 COPY ./requirements.txt .
-RUN apk add --no-cache --virtual .build-deps gcc musl-dev && \
+RUN apk add --no-cache --virtual .build-deps \
+        gcc \
+        musl-dev \
+        linux-headers \
+        python3-dev && \
     pip install -r requirements.txt && \
     apk del .build-deps
 
