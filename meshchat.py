@@ -22,6 +22,7 @@ import webbrowser
 
 from peewee import SqliteDatabase
 from serial.tools import list_ports
+import psutil
 
 import database
 from src.backend.announce_handler import AnnounceHandler
@@ -146,6 +147,12 @@ class ReticulumMeshChat:
 
         # remember websocket clients
         self.websocket_clients: List[web.WebSocketResponse] = []
+
+        # track announce timestamps for rate calculation
+        self.announce_timestamps = []
+
+        # track download speeds for nomadnetwork files (list of tuples: (file_size_bytes, duration_seconds))
+        self.download_speeds = []
 
         # register audio call identity
         self.audio_call_manager = AudioCallManager(identity=self.identity)
@@ -954,6 +961,34 @@ class ReticulumMeshChat:
         # get app info
         @routes.get("/api/v1/app/info")
         async def index(request):
+            # Get memory usage for current process
+            process = psutil.Process()
+            memory_info = process.memory_info()
+
+            # Get network I/O statistics
+            net_io = psutil.net_io_counters()
+
+            # Get total paths
+            path_table = self.reticulum.get_path_table()
+            total_paths = len(path_table)
+
+            # Calculate announce rates
+            current_time = time.time()
+            announces_per_second = len([t for t in self.announce_timestamps if current_time - t <= 1.0])
+            announces_per_minute = len([t for t in self.announce_timestamps if current_time - t <= 60.0])
+            announces_per_hour = len([t for t in self.announce_timestamps if current_time - t <= 3600.0])
+
+            # Clean up old announce timestamps (older than 1 hour)
+            self.announce_timestamps = [t for t in self.announce_timestamps if current_time - t <= 3600.0]
+
+            # Calculate average download speed
+            avg_download_speed_bps = None
+            if self.download_speeds:
+                total_bytes = sum(size for size, _ in self.download_speeds)
+                total_duration = sum(duration for _, duration in self.download_speeds)
+                if total_duration > 0:
+                    avg_download_speed_bps = total_bytes / total_duration
+
             return web.json_response({
                 "app_info": {
                     "version": self.get_app_version(),
@@ -966,6 +1001,25 @@ class ReticulumMeshChat:
                     "reticulum_config_path": self.reticulum.configpath,
                     "is_connected_to_shared_instance": self.reticulum.is_connected_to_shared_instance,
                     "is_transport_enabled": self.reticulum.transport_enabled(),
+                    "memory_usage": {
+                        "rss": memory_info.rss,  # Resident Set Size (bytes)
+                        "vms": memory_info.vms,  # Virtual Memory Size (bytes)
+                    },
+                    "network_stats": {
+                        "bytes_sent": net_io.bytes_sent,
+                        "bytes_recv": net_io.bytes_recv,
+                        "packets_sent": net_io.packets_sent,
+                        "packets_recv": net_io.packets_recv,
+                    },
+                    "reticulum_stats": {
+                        "total_paths": total_paths,
+                        "announces_per_second": announces_per_second,
+                        "announces_per_minute": announces_per_minute,
+                        "announces_per_hour": announces_per_hour,
+                    },
+                    "download_stats": {
+                        "avg_download_speed_bps": avg_download_speed_bps,
+                    },
                 },
             })
 
@@ -2245,6 +2299,16 @@ class ReticulumMeshChat:
 
             # handle successful file download
             def on_file_download_success(file_name, file_bytes):
+                # Track download speed
+                download_size = len(file_bytes)
+                if hasattr(downloader, 'start_time') and downloader.start_time:
+                    download_duration = time.time() - downloader.start_time
+                    if download_duration > 0:
+                        self.download_speeds.append((download_size, download_duration))
+                        # Keep only last 100 downloads for average calculation
+                        if len(self.download_speeds) > 100:
+                            self.download_speeds.pop(0)
+
                 AsyncUtils.run_async(client.send_str(json.dumps({
                     "type": "nomadnet.file.download",
                     "nomadnet_file_download": {
@@ -2282,6 +2346,7 @@ class ReticulumMeshChat:
 
             # download the file
             downloader = NomadnetFileDownloader(destination_hash, file_path, on_file_download_success, on_file_download_failure, on_file_download_progress)
+            downloader.start_time = time.time()
             AsyncUtils.run_async(downloader.download())
 
         # handle downloading a page from a nomadnet node
@@ -3054,6 +3119,9 @@ class ReticulumMeshChat:
         # log received announce
         print("Received an announce from " + RNS.prettyhexrep(destination_hash) + " for [call.audio]")
 
+        # track announce timestamp
+        self.announce_timestamps.append(time.time())
+
         # upsert announce to database
         self.db_upsert_announce(announced_identity, destination_hash, aspect, app_data, announce_packet_hash)
 
@@ -3074,6 +3142,9 @@ class ReticulumMeshChat:
 
         # log received announce
         print("Received an announce from " + RNS.prettyhexrep(destination_hash) + " for [lxmf.delivery]")
+
+        # track announce timestamp
+        self.announce_timestamps.append(time.time())
 
         # upsert announce to database
         self.db_upsert_announce(announced_identity, destination_hash, aspect, app_data, announce_packet_hash)
@@ -3099,6 +3170,9 @@ class ReticulumMeshChat:
 
         # log received announce
         print("Received an announce from " + RNS.prettyhexrep(destination_hash) + " for [lxmf.propagation]")
+
+        # track announce timestamp
+        self.announce_timestamps.append(time.time())
 
         # upsert announce to database
         self.db_upsert_announce(announced_identity, destination_hash, aspect, app_data, announce_packet_hash)
@@ -3183,6 +3257,9 @@ class ReticulumMeshChat:
 
         # log received announce
         print("Received an announce from " + RNS.prettyhexrep(destination_hash) + " for [nomadnetwork.node]")
+
+        # track announce timestamp
+        self.announce_timestamps.append(time.time())
 
         # upsert announce to database
         self.db_upsert_announce(announced_identity, destination_hash, aspect, app_data, announce_packet_hash)

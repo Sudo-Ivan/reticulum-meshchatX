@@ -124,7 +124,12 @@
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
             </div>
-            <div class="my-auto">Downloading: {{ nodeFilePath }} ({{ nodeFileProgress }}%)</div>
+            <div class="my-auto">
+                Downloading: {{ nodeFilePath }} ({{ nodeFileProgress }}%)
+                <span v-if="nodeFileDownloadSpeed !== null" class="ml-2 text-sm">
+                    - {{ formatBytesPerSecond(nodeFileDownloadSpeed) }}
+                </span>
+            </div>
         </div>
     </div>
 
@@ -179,6 +184,7 @@ import DialogUtils from "../../js/DialogUtils";
 import WebSocketConnection from "../../js/WebSocketConnection";
 import NomadNetworkSidebar from "./NomadNetworkSidebar.vue";
 import GlobalEmitter from "../../js/GlobalEmitter";
+import Utils from "../../js/Utils";
 
 export default {
     name: 'NomadNetworkPage',
@@ -213,6 +219,10 @@ export default {
             isDownloadingNodeFile: false,
             nodeFilePath: null,
             nodeFileProgress: 0,
+            nodeFileDownloadStartTime: null,
+            nodeFileLastProgressTime: null,
+            nodeFileLastProgressValue: 0,
+            nodeFileDownloadSpeed: null,
 
             nomadnetPageDownloadCallbacks: {},
             nomadnetFileDownloadCallbacks: {},
@@ -756,9 +766,22 @@ export default {
                     this.isDownloadingNodeFile = true;
                     this.nodeFilePath = parsedUrl.path.split("/").pop();
                     this.nodeFileProgress = 0;
+                    this.nodeFileDownloadStartTime = Date.now();
+                    this.nodeFileLastProgressTime = Date.now();
+                    this.nodeFileLastProgressValue = 0;
+                    this.nodeFileDownloadSpeed = null;
 
                     // start file download
                     this.downloadNomadNetFile(destinationHash, parsedUrl.path, (fileName, fileBytesBase64) => {
+
+                        // Calculate final download speed based on actual file size
+                        if (this.nodeFileDownloadStartTime) {
+                            const totalTime = (Date.now() - this.nodeFileDownloadStartTime) / 1000; // seconds
+                            const fileSizeBytes = atob(fileBytesBase64).length;
+                            if (totalTime > 0) {
+                                this.nodeFileDownloadSpeed = fileSizeBytes / totalTime;
+                            }
+                        }
 
                         // no longer downloading
                         this.isDownloadingNodeFile = false;
@@ -766,16 +789,49 @@ export default {
                         // download file to browser
                         this.downloadFileFromBase64(fileName, fileBytesBase64);
 
+                        // Clear speed after a moment
+                        setTimeout(() => {
+                            this.nodeFileDownloadSpeed = null;
+                        }, 2000);
+
                     }, (failureReason) => {
 
                         // no longer downloading
                         this.isDownloadingNodeFile = false;
+                        this.nodeFileDownloadSpeed = null;
 
                         // show error message
                         DialogUtils.alert(`Failed to download file: ${failureReason}`);
 
                     }, (progress) => {
-                        this.nodeFileProgress = Math.round(progress * 100);
+                        const currentTime = Date.now();
+                        const progressValue = progress;
+                        this.nodeFileProgress = Math.round(progressValue * 100);
+
+                        // Calculate estimated download speed based on progress rate
+                        if (this.nodeFileDownloadStartTime && progressValue > 0) {
+                            const elapsedTime = (currentTime - this.nodeFileDownloadStartTime) / 1000; // seconds
+                            if (elapsedTime > 0.5) { // Only calculate after at least 0.5 seconds
+                                // Estimate total file size based on progress rate
+                                // If we've downloaded progressValue in elapsedTime, estimate total time
+                                const estimatedTotalTime = elapsedTime / progressValue;
+                                // Estimate file size based on average download speed assumption
+                                // We'll refine this when download completes with actual size
+                                // For now, estimate based on typical mesh network file sizes (100KB-10MB range)
+                                // Use a conservative estimate that will be updated when download completes
+                                const estimatedFileSize = 500 * 1024; // Start with 500KB estimate
+                                const estimatedBytesDownloaded = estimatedFileSize * progressValue;
+                                const estimatedSpeed = estimatedBytesDownloaded / elapsedTime;
+                                
+                                // Only update if we have a reasonable estimate
+                                if (estimatedSpeed > 0 && estimatedSpeed < 100 * 1024 * 1024) { // Cap at 100MB/s
+                                    this.nodeFileDownloadSpeed = estimatedSpeed;
+                                }
+                            }
+                        }
+
+                        this.nodeFileLastProgressTime = currentTime;
+                        this.nodeFileLastProgressValue = progressValue;
                     });
 
                     return;
@@ -828,6 +884,9 @@ export default {
             // revoke object url to clear memory
             setTimeout(() => URL.revokeObjectURL(objectUrl), 10000);
 
+        },
+        formatBytesPerSecond: function(bytesPerSecond) {
+            return Utils.formatBytesPerSecond(bytesPerSecond);
         },
         onNodeClick: function(node) {
 

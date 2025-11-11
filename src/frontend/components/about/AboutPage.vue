@@ -64,6 +64,141 @@
                 </div>
             </div>
 
+            <!-- system resources -->
+            <div v-if="appInfo && appInfo.memory_usage" class="bg-white dark:bg-zinc-900 rounded shadow">
+                <div class="flex border-b border-gray-300 dark:border-zinc-700 text-gray-700 dark:text-zinc-200 p-2 font-semibold">
+                    System Resources
+                    <span class="ml-auto text-xs text-green-600 dark:text-green-400 flex items-center">
+                        <span class="w-2 h-2 bg-green-500 rounded-full mr-1 animate-pulse"></span>
+                        Live
+                    </span>
+                </div>
+                <div class="divide-y divide-gray-200 dark:divide-zinc-800 text-gray-900 dark:text-zinc-200">
+
+                    <!-- memory usage -->
+                    <div class="flex p-1">
+                        <div class="mr-auto">
+                            <div>Memory Usage (RSS)</div>
+                            <div class="text-sm text-gray-700 dark:text-zinc-400">{{ formatBytes(appInfo.memory_usage.rss) }}</div>
+                        </div>
+                    </div>
+
+                    <!-- virtual memory -->
+                    <div class="flex p-1">
+                        <div class="mr-auto">
+                            <div>Virtual Memory Size</div>
+                            <div class="text-sm text-gray-700 dark:text-zinc-400">{{ formatBytes(appInfo.memory_usage.vms) }}</div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- network statistics -->
+            <div v-if="appInfo && appInfo.network_stats" class="bg-white dark:bg-zinc-900 rounded shadow">
+                <div class="flex border-b border-gray-300 dark:border-zinc-700 text-gray-700 dark:text-zinc-200 p-2 font-semibold">
+                    Network Statistics
+                    <span class="ml-auto text-xs text-green-600 dark:text-green-400 flex items-center">
+                        <span class="w-2 h-2 bg-green-500 rounded-full mr-1 animate-pulse"></span>
+                        Live
+                    </span>
+                </div>
+                <div class="divide-y divide-gray-200 dark:divide-zinc-800 text-gray-900 dark:text-zinc-200">
+
+                    <!-- bytes sent -->
+                    <div class="flex p-1">
+                        <div class="mr-auto">
+                            <div>Data Sent</div>
+                            <div class="text-sm text-gray-700 dark:text-zinc-400">{{ formatBytes(appInfo.network_stats.bytes_sent) }}</div>
+                        </div>
+                    </div>
+
+                    <!-- bytes received -->
+                    <div class="flex p-1">
+                        <div class="mr-auto">
+                            <div>Data Received</div>
+                            <div class="text-sm text-gray-700 dark:text-zinc-400">{{ formatBytes(appInfo.network_stats.bytes_recv) }}</div>
+                        </div>
+                    </div>
+
+                    <!-- packets sent -->
+                    <div class="p-1">
+                        <div>Packets Sent</div>
+                        <div class="text-sm text-gray-700 dark:text-zinc-400">{{ formatNumber(appInfo.network_stats.packets_sent) }}</div>
+                    </div>
+
+                    <!-- packets received -->
+                    <div class="p-1">
+                        <div>Packets Received</div>
+                        <div class="text-sm text-gray-700 dark:text-zinc-400">{{ formatNumber(appInfo.network_stats.packets_recv) }}</div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- reticulum statistics -->
+            <div v-if="appInfo && appInfo.reticulum_stats" class="bg-white dark:bg-zinc-900 rounded shadow">
+                <div class="flex border-b border-gray-300 dark:border-zinc-700 text-gray-700 dark:text-zinc-200 p-2 font-semibold">
+                    Reticulum Statistics
+                    <span class="ml-auto text-xs text-green-600 dark:text-green-400 flex items-center">
+                        <span class="w-2 h-2 bg-green-500 rounded-full mr-1 animate-pulse"></span>
+                        Live
+                    </span>
+                </div>
+                <div class="divide-y divide-gray-200 dark:divide-zinc-800 text-gray-900 dark:text-zinc-200">
+
+                    <!-- total paths -->
+                    <div class="p-1">
+                        <div>Total Paths</div>
+                        <div class="text-sm text-gray-700 dark:text-zinc-400">{{ formatNumber(appInfo.reticulum_stats.total_paths) }}</div>
+                    </div>
+
+                    <!-- announces per second -->
+                    <div class="p-1">
+                        <div>Announces per Second</div>
+                        <div class="text-sm text-gray-700 dark:text-zinc-400">{{ formatNumber(appInfo.reticulum_stats.announces_per_second) }}</div>
+                    </div>
+
+                    <!-- announces per minute -->
+                    <div class="p-1">
+                        <div>Announces per Minute</div>
+                        <div class="text-sm text-gray-700 dark:text-zinc-400">{{ formatNumber(appInfo.reticulum_stats.announces_per_minute) }}</div>
+                    </div>
+
+                    <!-- announces per hour -->
+                    <div class="p-1">
+                        <div>Announces per Hour</div>
+                        <div class="text-sm text-gray-700 dark:text-zinc-400">{{ formatNumber(appInfo.reticulum_stats.announces_per_hour) }}</div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- download statistics -->
+            <div v-if="appInfo && appInfo.download_stats" class="bg-white dark:bg-zinc-900 rounded shadow">
+                <div class="flex border-b border-gray-300 dark:border-zinc-700 text-gray-700 dark:text-zinc-200 p-2 font-semibold">
+                    Download Statistics
+                    <span class="ml-auto text-xs text-green-600 dark:text-green-400 flex items-center">
+                        <span class="w-2 h-2 bg-green-500 rounded-full mr-1 animate-pulse"></span>
+                        Live
+                    </span>
+                </div>
+                <div class="divide-y divide-gray-200 dark:divide-zinc-800 text-gray-900 dark:text-zinc-200">
+
+                    <!-- average download speed -->
+                    <div class="p-1">
+                        <div>Average Download Speed</div>
+                        <div class="text-sm text-gray-700 dark:text-zinc-400">
+                            <span v-if="appInfo.download_stats.avg_download_speed_bps !== null">
+                                {{ formatBytesPerSecond(appInfo.download_stats.avg_download_speed_bps) }}
+                            </span>
+                            <span v-else>No downloads yet</span>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
             <!-- reticulum status -->
             <div v-if="appInfo" class="bg-white dark:bg-zinc-900 rounded shadow">
                 <div class="flex border-b border-gray-300 dark:border-zinc-700 text-gray-700 dark:text-zinc-200 p-2 font-semibold">Reticulum Status</div>
@@ -126,11 +261,21 @@ export default {
         return {
             appInfo: null,
             config: null,
+            updateInterval: null,
         };
     },
     mounted() {
         this.getAppInfo();
         this.getConfig();
+        // Update stats every 5 seconds
+        this.updateInterval = setInterval(() => {
+            this.getAppInfo();
+        }, 5000);
+    },
+    beforeUnmount() {
+        if (this.updateInterval) {
+            clearInterval(this.updateInterval);
+        }
     },
     methods: {
         async getAppInfo() {
@@ -165,6 +310,12 @@ export default {
         },
         formatBytes: function(bytes) {
             return Utils.formatBytes(bytes);
+        },
+        formatNumber: function(num) {
+            return Utils.formatNumber(num);
+        },
+        formatBytesPerSecond: function(bytesPerSecond) {
+            return Utils.formatBytesPerSecond(bytesPerSecond);
         },
     },
     computed: {

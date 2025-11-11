@@ -25,6 +25,13 @@ class Utils {
 
     }
 
+    static formatNumber(num) {
+        if(num === 0){
+            return '0';
+        }
+        return num.toLocaleString();
+    }
+
     static parseSeconds(secondsToFormat) {
         secondsToFormat = Number(secondsToFormat);
         var days = Math.floor(secondsToFormat / (3600 * 24));
@@ -124,6 +131,22 @@ class Utils {
         const i = Math.floor(Math.log(bits) / Math.log(k));
 
         return parseFloat((bits / Math.pow(k, i)).toFixed(decimals)) + ' ' + sizes[i];
+
+    }
+
+    static formatBytesPerSecond(bytesPerSecond) {
+
+        if(bytesPerSecond === 0 || bytesPerSecond == null){
+            return '0 B/s';
+        }
+
+        const k = 1024;
+        const decimals = 1;
+        const sizes = ['B/s', 'KB/s', 'MB/s', 'GB/s', 'TB/s', 'PB/s', 'EB/s', 'ZB/s', 'YB/s'];
+
+        const i = Math.floor(Math.log(bytesPerSecond) / Math.log(k));
+
+        return parseFloat((bytesPerSecond / Math.pow(k, i)).toFixed(decimals)) + ' ' + sizes[i];
 
     }
 
