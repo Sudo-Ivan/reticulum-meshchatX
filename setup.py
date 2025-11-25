@@ -39,6 +39,13 @@ setup(
             "optimize": 2,
             # change where exe is built to
             'build_exe': 'build/exe',
+            # make the build relocatable by replacing absolute paths
+            'replace_paths': [
+                ('*', ''),
+            ],
+            # zip all packages to make the build more portable
+            'zip_include_packages': ['*'],
+            'zip_exclude_packages': [],
         },
     },
 )
