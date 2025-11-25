@@ -23,6 +23,8 @@ setup(
                 # https://github.com/marcelotduarte/cx_Freeze/discussions/2039
                 # https://github.com/marcelotduarte/cx_Freeze/issues/2041
                 'RNS',
+                'RNS.Interfaces',
+                'LXMF',
             ],
             # files that are required
             'include_files': [
@@ -43,9 +45,6 @@ setup(
             'replace_paths': [
                 ('*', ''),
             ],
-            # zip all packages to make the build more portable
-            'zip_include_packages': ['*'],
-            'zip_exclude_packages': [],
         },
     },
 )
