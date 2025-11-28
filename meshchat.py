@@ -154,6 +154,10 @@ class ReticulumMeshChat:
         # track download speeds for nomadnetwork files (list of tuples: (file_size_bytes, duration_seconds))
         self.download_speeds = []
 
+        # track active downloads (download_id -> downloader instance)
+        self.active_downloads = {}
+        self.download_id_counter = 0
+
         # register audio call identity
         self.audio_call_manager = AudioCallManager(identity=self.identity)
         self.audio_call_manager.register_incoming_call_callback(self.on_incoming_audio_call)
@@ -2287,6 +2291,24 @@ class ReticulumMeshChat:
             # update config
             await self.update_config(config)
 
+        # handle canceling a download
+        elif _type == "nomadnet.download.cancel":
+
+            # get data from websocket client
+            download_id = data["download_id"]
+
+            # cancel the download
+            if download_id in self.active_downloads:
+                downloader = self.active_downloads[download_id]
+                downloader.cancel()
+                del self.active_downloads[download_id]
+
+                # notify client
+                AsyncUtils.run_async(client.send_str(json.dumps({
+                    "type": "nomadnet.download.cancelled",
+                    "download_id": download_id,
+                })))
+
         # handle downloading a file from a nomadnet node
         elif _type == "nomadnet.file.download":
 
@@ -2297,8 +2319,16 @@ class ReticulumMeshChat:
             # convert destination hash to bytes
             destination_hash = bytes.fromhex(destination_hash)
 
+            # generate download id
+            self.download_id_counter += 1
+            download_id = self.download_id_counter
+
             # handle successful file download
             def on_file_download_success(file_name, file_bytes):
+                # remove from active downloads
+                if download_id in self.active_downloads:
+                    del self.active_downloads[download_id]
+
                 # Track download speed
                 download_size = len(file_bytes)
                 if hasattr(downloader, 'start_time') and downloader.start_time:
@@ -2311,6 +2341,7 @@ class ReticulumMeshChat:
 
                 AsyncUtils.run_async(client.send_str(json.dumps({
                     "type": "nomadnet.file.download",
+                    "download_id": download_id,
                     "nomadnet_file_download": {
                         "status": "success",
                         "destination_hash": destination_hash.hex(),
@@ -2322,8 +2353,13 @@ class ReticulumMeshChat:
 
             # handle file download failure
             def on_file_download_failure(failure_reason):
+                # remove from active downloads
+                if download_id in self.active_downloads:
+                    del self.active_downloads[download_id]
+
                 AsyncUtils.run_async(client.send_str(json.dumps({
                     "type": "nomadnet.file.download",
+                    "download_id": download_id,
                     "nomadnet_file_download": {
                         "status": "failure",
                         "failure_reason": failure_reason,
@@ -2336,6 +2372,7 @@ class ReticulumMeshChat:
             def on_file_download_progress(progress):
                 AsyncUtils.run_async(client.send_str(json.dumps({
                     "type": "nomadnet.file.download",
+                    "download_id": download_id,
                     "nomadnet_file_download": {
                         "status": "progress",
                         "progress": progress,
@@ -2347,6 +2384,19 @@ class ReticulumMeshChat:
             # download the file
             downloader = NomadnetFileDownloader(destination_hash, file_path, on_file_download_success, on_file_download_failure, on_file_download_progress)
             downloader.start_time = time.time()
+            self.active_downloads[download_id] = downloader
+
+            # notify client download started
+            AsyncUtils.run_async(client.send_str(json.dumps({
+                "type": "nomadnet.file.download",
+                "download_id": download_id,
+                "nomadnet_file_download": {
+                    "status": "started",
+                    "destination_hash": destination_hash.hex(),
+                    "file_path": file_path,
+                },
+            })))
+
             AsyncUtils.run_async(downloader.download())
 
         # handle downloading a page from a nomadnet node
@@ -2356,6 +2406,10 @@ class ReticulumMeshChat:
             destination_hash = data["nomadnet_page_download"]["destination_hash"]
             page_path = data["nomadnet_page_download"]["page_path"]
             field_data = data["nomadnet_page_download"]["field_data"]
+
+            # generate download id
+            self.download_id_counter += 1
+            download_id = self.download_id_counter
        
             combined_data = {}
             # parse data from page path
@@ -2383,8 +2437,13 @@ class ReticulumMeshChat:
 
             # handle successful page download
             def on_page_download_success(page_content):
+                # remove from active downloads
+                if download_id in self.active_downloads:
+                    del self.active_downloads[download_id]
+
                 AsyncUtils.run_async(client.send_str(json.dumps({
                     "type": "nomadnet.page.download",
+                    "download_id": download_id,
                     "nomadnet_page_download": {
                         "status": "success",
                         "destination_hash": destination_hash.hex(),
@@ -2395,8 +2454,13 @@ class ReticulumMeshChat:
 
             # handle page download failure
             def on_page_download_failure(failure_reason):
+                # remove from active downloads
+                if download_id in self.active_downloads:
+                    del self.active_downloads[download_id]
+
                 AsyncUtils.run_async(client.send_str(json.dumps({
                     "type": "nomadnet.page.download",
+                    "download_id": download_id,
                     "nomadnet_page_download": {
                         "status": "failure",
                         "failure_reason": failure_reason,
@@ -2409,6 +2473,7 @@ class ReticulumMeshChat:
             def on_page_download_progress(progress):
                 AsyncUtils.run_async(client.send_str(json.dumps({
                     "type": "nomadnet.page.download",
+                    "download_id": download_id,
                     "nomadnet_page_download": {
                         "status": "progress",
                         "progress": progress,
@@ -2419,6 +2484,19 @@ class ReticulumMeshChat:
 
             # download the page
             downloader = NomadnetPageDownloader(destination_hash, page_path_to_download, combined_data, on_page_download_success, on_page_download_failure, on_page_download_progress)
+            self.active_downloads[download_id] = downloader
+
+            # notify client download started
+            AsyncUtils.run_async(client.send_str(json.dumps({
+                "type": "nomadnet.page.download",
+                "download_id": download_id,
+                "nomadnet_page_download": {
+                    "status": "started",
+                    "destination_hash": destination_hash.hex(),
+                    "page_path": page_path,
+                },
+            })))
+
             AsyncUtils.run_async(downloader.download())
 
         # unhandled type
@@ -3518,9 +3596,37 @@ class NomadnetDownloader:
         self.on_download_success = on_download_success
         self.on_download_failure = on_download_failure
         self.on_progress_update = on_progress_update
+        self.request_receipt = None
+        self.is_cancelled = False
+        self.link = None
+
+    # cancel the download
+    def cancel(self):
+        self.is_cancelled = True
+        
+        # cancel the request if it exists
+        if self.request_receipt is not None:
+            try:
+                self.request_receipt.cancel()
+            except:
+                pass
+
+        # clean up the link if we created it
+        if self.link is not None:
+            try:
+                self.link.teardown()
+            except:
+                pass
+
+        # notify that download was cancelled
+        self.on_download_failure("cancelled")
 
     # setup link to destination and request download
     async def download(self, path_lookup_timeout: int = 15, link_establishment_timeout: int = 15):
+
+        # check if cancelled before starting
+        if self.is_cancelled:
+            return
 
         # use existing established link if it's active
         if self.destination_hash in nomadnet_cached_links:
@@ -3541,11 +3647,18 @@ class NomadnetDownloader:
 
             # wait until we have a path, or give up after the configured timeout
             while not RNS.Transport.has_path(self.destination_hash) and time.time() < timeout_after_seconds:
+                # check if cancelled during path lookup
+                if self.is_cancelled:
+                    return
                 await asyncio.sleep(0.1)
 
         # if we still don't have a path, we can't establish a link, so bail out
         if not RNS.Transport.has_path(self.destination_hash):
             self.on_download_failure("Could not find path to destination.")
+            return
+
+        # check if cancelled before establishing link
+        if self.is_cancelled:
             return
 
         # create destination to nomadnet node
@@ -3561,12 +3674,16 @@ class NomadnetDownloader:
         # create link to destination
         print("[NomadnetDownloader] establishing new link for request")
         link = RNS.Link(destination, established_callback=self.link_established)
+        self.link = link
 
         # determine when to timeout
         timeout_after_seconds = time.time() + link_establishment_timeout
 
         # wait until we have established a link, or give up after the configured timeout
         while link.status is not RNS.Link.ACTIVE and time.time() < timeout_after_seconds:
+            # check if cancelled during link establishment
+            if self.is_cancelled:
+                return
             await asyncio.sleep(0.1)
 
         # if we still haven't established a link, bail out
@@ -3576,11 +3693,15 @@ class NomadnetDownloader:
     # link to destination was established, we should now request the download
     def link_established(self, link):
 
+        # check if cancelled before requesting
+        if self.is_cancelled:
+            return
+
         # cache link for using in future requests
         nomadnet_cached_links[self.destination_hash] = link
 
         # request download over link
-        link.request(
+        self.request_receipt = link.request(
             self.path,
             data=self.data,
             response_callback=self.on_response,

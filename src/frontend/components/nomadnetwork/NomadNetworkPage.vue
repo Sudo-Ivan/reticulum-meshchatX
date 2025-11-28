@@ -111,7 +111,10 @@
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
                 </div>
-                <div class="my-auto">Loading {{ nodePageProgress }}%</div>
+                <div class="my-auto flex-1">Loading {{ nodePageProgress }}%</div>
+                <button @click="cancelPageDownload" type="button" class="my-auto text-white bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800 rounded px-3 py-1 text-sm font-semibold cursor-pointer ml-3">
+                    Cancel
+                </button>
             </div>
             <pre v-else v-html="renderedNodePageContent()" class="h-full break-words whitespace-pre-wrap"></pre>
         </div>
@@ -124,12 +127,15 @@
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
             </div>
-            <div class="my-auto">
+            <div class="my-auto flex-1">
                 Downloading: {{ nodeFilePath }} ({{ nodeFileProgress }}%)
                 <span v-if="nodeFileDownloadSpeed !== null" class="ml-2 text-sm">
                     - {{ formatBytesPerSecond(nodeFileDownloadSpeed) }}
                 </span>
             </div>
+            <button @click="cancelFileDownload" type="button" class="my-auto text-white bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800 rounded px-3 py-1 text-sm font-semibold cursor-pointer">
+                Cancel
+            </button>
         </div>
     </div>
 
@@ -215,6 +221,7 @@ export default {
             nodePageProgress: 0,
             nodePagePathHistory: [],
             nodePageCache: {},
+            currentPageDownloadId: null,
 
             isDownloadingNodeFile: false,
             nodeFilePath: null,
@@ -223,6 +230,7 @@ export default {
             nodeFileLastProgressTime: null,
             nodeFileLastProgressValue: 0,
             nodeFileDownloadSpeed: null,
+            currentFileDownloadId: null,
 
             nomadnetPageDownloadCallbacks: {},
             nomadnetFileDownloadCallbacks: {},
@@ -297,6 +305,13 @@ export default {
 
                     // get data from server
                     const nomadnetPageDownload = json.nomadnet_page_download;
+                    const downloadId = json.download_id;
+
+                    // handle started status
+                    if(nomadnetPageDownload.status === "started"){
+                        this.currentPageDownloadId = downloadId;
+                        return;
+                    }
 
                     // find download callbacks
                     const getNomadnetPageDownloadCallbackKey = this.getNomadnetPageDownloadCallbackKey(nomadnetPageDownload.destination_hash, nomadnetPageDownload.page_path);
@@ -310,6 +325,7 @@ export default {
                     if(nomadnetPageDownload.status === "success" && nomadnetPageDownloadCallback.onSuccessCallback){
                         nomadnetPageDownloadCallback.onSuccessCallback(nomadnetPageDownload.page_content);
                         delete this.nomadnetPageDownloadCallbacks[getNomadnetPageDownloadCallbackKey];
+                        this.currentPageDownloadId = null;
                         return;
                     }
 
@@ -317,6 +333,7 @@ export default {
                     if(nomadnetPageDownload.status === "failure" && nomadnetPageDownloadCallback.onFailureCallback){
                         nomadnetPageDownloadCallback.onFailureCallback(nomadnetPageDownload.failure_reason);
                         delete this.nomadnetPageDownloadCallbacks[getNomadnetPageDownloadCallbackKey];
+                        this.currentPageDownloadId = null;
                         return;
                     }
 
@@ -333,6 +350,13 @@ export default {
 
                     // get data from server
                     const nomadnetFileDownload = json.nomadnet_file_download;
+                    const downloadId = json.download_id;
+
+                    // handle started status
+                    if(nomadnetFileDownload.status === "started"){
+                        this.currentFileDownloadId = downloadId;
+                        return;
+                    }
 
                     // find download callbacks
                     const getNomadnetFileDownloadCallbackKey = this.getNomadnetFileDownloadCallbackKey(nomadnetFileDownload.destination_hash, nomadnetFileDownload.file_path);
@@ -346,6 +370,7 @@ export default {
                     if(nomadnetFileDownload.status === "success" && nomadnetFileDownloadCallback.onSuccessCallback){
                         nomadnetFileDownloadCallback.onSuccessCallback(nomadnetFileDownload.file_name, nomadnetFileDownload.file_bytes);
                         delete this.nomadnetFileDownloadCallbacks[getNomadnetFileDownloadCallbackKey];
+                        this.currentFileDownloadId = null;
                         return;
                     }
 
@@ -353,6 +378,7 @@ export default {
                     if(nomadnetFileDownload.status === "failure" && nomadnetFileDownloadCallback.onFailureCallback){
                         nomadnetFileDownloadCallback.onFailureCallback(nomadnetFileDownload.failure_reason);
                         delete this.nomadnetFileDownloadCallbacks[getNomadnetFileDownloadCallbackKey];
+                        this.currentFileDownloadId = null;
                         return;
                     }
 
@@ -364,6 +390,26 @@ export default {
 
                     break;
 
+                }
+                case 'nomadnet.download.cancelled': {
+                    // handle download cancellation
+                    const downloadId = json.download_id;
+                    
+                    // clear page download if it matches
+                    if(this.currentPageDownloadId === downloadId){
+                        this.currentPageDownloadId = null;
+                        this.isLoadingNodePage = false;
+                        this.nodePageContent = "Download cancelled";
+                    }
+                    
+                    // clear file download if it matches
+                    if(this.currentFileDownloadId === downloadId){
+                        this.currentFileDownloadId = null;
+                        this.isDownloadingNodeFile = false;
+                        this.nodeFileDownloadSpeed = null;
+                    }
+                    
+                    break;
                 }
             }
         },
@@ -1033,6 +1079,22 @@ export default {
         },
         renderedNodePageContent() {
             return this.renderPageContent(this.nodePagePath, this.nodePageContent);
+        },
+        cancelPageDownload() {
+            if(this.currentPageDownloadId !== null){
+                WebSocketConnection.send(JSON.stringify({
+                    "type": "nomadnet.download.cancel",
+                    "download_id": this.currentPageDownloadId,
+                }));
+            }
+        },
+        cancelFileDownload() {
+            if(this.currentFileDownloadId !== null){
+                WebSocketConnection.send(JSON.stringify({
+                    "type": "nomadnet.download.cancel",
+                    "download_id": this.currentFileDownloadId,
+                }));
+            }
         },
     },
 }
