@@ -1115,11 +1115,7 @@ class ReticulumMeshChat:
                 interfaces[interface_name] = interface_details
 
             # handle SerialInterface, KISSInterface, and AX25KISSInterface
-            if (
-                interface_type == "SerialInterface"
-                or interface_type == "KISSInterface"
-                or interface_type == "AX25KISSInterface"
-            ):
+            if interface_type in ("SerialInterface", "KISSInterface", "AX25KISSInterface"):
                 # ensure port provided
                 interface_port = data.get("port")
                 if interface_port is None or interface_port == "":
@@ -1140,10 +1136,7 @@ class ReticulumMeshChat:
                 InterfaceEditor.update_value(interface_details, data, "stopbits")
 
                 # Handle KISS and AX25KISS specific options
-                if (
-                    interface_type == "KISSInterface"
-                    or interface_type == "AX25KISSInterface"
-                ):
+                if interface_type in ("KISSInterface", "AX25KISSInterface"):
                     # set optional options
                     InterfaceEditor.update_value(interface_details, data, "preamble")
                     InterfaceEditor.update_value(interface_details, data, "txtail")
@@ -2063,9 +2056,7 @@ class ReticulumMeshChat:
 
             # check if user wants to request the path from the network right now
             request_query_param = request.query.get("request", "false")
-            should_request_now = (
-                request_query_param == "true" or request_query_param == "1"
-            )
+            should_request_now = request_query_param in ("true", "1")
             if should_request_now:
                 # determine how long we should wait for a path response
                 timeout_seconds = int(request.query.get("timeout", 15))
