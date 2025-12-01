@@ -179,13 +179,53 @@ app.whenReady().then(async () => {
     }
 
     // find path to python/cxfreeze reticulum meshchat executable
-    const exeName = process.platform === "win32" ? "ReticulumMeshChat.exe" : "ReticulumMeshChat";
-    var exe = path.join(__dirname, `build/exe/${exeName}`);
-
-    // if dist exe doesn't exist, check local build
-    if(!fs.existsSync(exe)){
-        exe = path.join(__dirname, '..', `build/exe/${exeName}`);
+    // Note: setup.py creates ReticulumMeshChatX (with X), not ReticulumMeshChat
+    const exeName = process.platform === "win32" ? "ReticulumMeshChatX.exe" : "ReticulumMeshChatX";
+    
+    // get app path (handles both development and packaged app)
+    const appPath = app.getAppPath();
+    // get resources path (where extraFiles are placed)
+    const resourcesPath = process.resourcesPath || path.join(appPath, '..', '..');
+    var exe = null;
+    
+    // when packaged, extraFiles are placed at resources/app/electron/build/exe
+    // when packaged with asar, unpacked files are in app.asar.unpacked/ directory
+    // app.getAppPath() returns the path to app.asar, so unpacked is at the same level
+    const possiblePaths = [
+        // packaged app - extraFiles location (resources/app/electron/build/exe)
+        path.join(resourcesPath, 'app', 'electron', 'build', 'exe', exeName),
+        // packaged app with asar (unpacked files from asarUnpack)
+        path.join(appPath, '..', 'app.asar.unpacked', 'build', 'exe', exeName),
+        // packaged app without asar (relative to app path)
+        path.join(appPath, 'build', 'exe', exeName),
+        // development mode (relative to electron directory)
+        path.join(__dirname, 'build', 'exe', exeName),
+        // development mode (relative to project root)
+        path.join(__dirname, '..', 'build', 'exe', exeName),
+    ];
+    
+    // find the first path that exists
+    for(const possibleExe of possiblePaths){
+        if(fs.existsSync(possibleExe)){
+            exe = possibleExe;
+            break;
+        }
     }
+    
+    // verify executable exists
+    if(!exe || !fs.existsSync(exe)){
+        const errorMsg = `Could not find executable: ${exeName}\nChecked paths:\n${possiblePaths.join('\n')}\n\nApp path: ${appPath}\nResources path: ${resourcesPath}`;
+        log(errorMsg);
+        if(mainWindow){
+            await dialog.showMessageBox(mainWindow, {
+                message: errorMsg,
+            });
+        }
+        app.quit();
+        return;
+    }
+    
+    log(`Found executable at: ${exe}`);
 
     try {
 
