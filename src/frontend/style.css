@@ -22,13 +22,17 @@
     border: 2px solid #e2e8f0;
 }
 
+.dark * {
+    scrollbar-color: #52525b #18181b;
+}
+
 .dark *::-webkit-scrollbar-track {
-    background: #1f1f23;
+    background: #18181b;
 }
 
 .dark *::-webkit-scrollbar-thumb {
-    background-color: #3f3f46;
-    border-color: #1f1f23;
+    background-color: #52525b;
+    border-color: #18181b;
 }
 
 .glass-card {
