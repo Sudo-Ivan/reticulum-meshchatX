@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
+import copy
 import io
 import json
 import os
@@ -20,7 +21,7 @@ import asyncio
 import base64
 import webbrowser
 
-from peewee import SqliteDatabase
+from peewee import SqliteDatabase, fn
 from serial.tools import list_ports
 import psutil
 
@@ -281,6 +282,157 @@ class ReticulumMeshChat:
             print("failed to enable or disable propagation node")
             pass
 
+    def _get_reticulum_section(self):
+        try:
+            reticulum_config = self.reticulum.config["reticulum"]
+        except Exception:
+            reticulum_config = None
+
+        if not isinstance(reticulum_config, dict):
+            reticulum_config = {}
+            self.reticulum.config["reticulum"] = reticulum_config
+
+        return reticulum_config
+
+    def _get_interfaces_section(self):
+
+        try:
+            interfaces = self.reticulum.config["interfaces"]
+        except Exception:
+            interfaces = None
+
+        if not isinstance(interfaces, dict):
+            interfaces = {}
+            self.reticulum.config["interfaces"] = interfaces
+
+        return interfaces
+
+    def _get_interfaces_snapshot(self):
+        snapshot = {}
+        interfaces = self._get_interfaces_section()
+        for name, interface in interfaces.items():
+            try:
+                snapshot[name] = copy.deepcopy(dict(interface))
+            except Exception:
+                try:
+                    snapshot[name] = copy.deepcopy(interface)
+                except Exception:
+                    snapshot[name] = {}
+        return snapshot
+
+    def _write_reticulum_config(self):
+        try:
+            self.reticulum.config.write()
+            return True
+        except Exception as e:
+            print(f"Failed to write Reticulum config: {e}")
+            return False
+
+    def build_user_guidance_messages(self):
+        guidance = []
+
+        interfaces = self._get_interfaces_section()
+        if len(interfaces) == 0:
+            guidance.append({
+                "id": "no_interfaces",
+                "title": "No Reticulum interfaces configured",
+                "description": "Add at least one Reticulum interface so MeshChat can talk to your radio or transport.",
+                "action_route": "/interfaces/add",
+                "action_label": "Add Interface",
+                "severity": "warning",
+            })
+
+        if not self.reticulum.transport_enabled():
+            guidance.append({
+                "id": "transport_disabled",
+                "title": "Transport mode is disabled",
+                "description": "Enable transport to allow MeshChat to relay traffic over your configured interfaces.",
+                "action_route": "/settings",
+                "action_label": "Open Settings",
+                "severity": "info",
+            })
+
+        if not self.config.auto_announce_enabled.get():
+            guidance.append({
+                "id": "announce_disabled",
+                "title": "Auto announcements are turned off",
+                "description": "Automatic announces make it easier for other peers to discover you. Enable them if you want to stay visible.",
+                "action_route": "/settings",
+                "action_label": "Manage Announce Settings",
+                "severity": "info",
+            })
+
+        return guidance
+
+    def _conversation_messages_query(self, destination_hash: str):
+        local_hash = self.local_lxmf_destination.hexhash
+        return (database.LxmfMessage
+                .select()
+                .where(
+                    ((database.LxmfMessage.source_hash == local_hash) & (database.LxmfMessage.destination_hash == destination_hash))
+                    | ((database.LxmfMessage.destination_hash == local_hash) & (database.LxmfMessage.source_hash == destination_hash))
+                ))
+
+    def get_conversation_latest_message(self, destination_hash: str):
+        return (self._conversation_messages_query(destination_hash)
+                .order_by(database.LxmfMessage.id.desc())
+                .get_or_none())
+
+    def conversation_has_attachments(self, destination_hash: str):
+        query = (self._conversation_messages_query(destination_hash)
+                 .where(
+                     database.LxmfMessage.fields.contains('"image"')
+                     | database.LxmfMessage.fields.contains('"audio"')
+                     | database.LxmfMessage.fields.contains('"file_attachments"')
+                 )
+                 .limit(1))
+        return query.exists()
+
+    def message_fields_have_attachments(self, fields_json: str | None):
+        if not fields_json:
+            return False
+        try:
+            fields = json.loads(fields_json)
+        except Exception:
+            return False
+        if "image" in fields or "audio" in fields:
+            return True
+        if "file_attachments" in fields and isinstance(fields["file_attachments"], list):
+            return len(fields["file_attachments"]) > 0
+        return False
+
+    def search_destination_hashes_by_message(self, search_term: str):
+        if search_term is None or search_term.strip() == "":
+            return set()
+
+        local_hash = self.local_lxmf_destination.hexhash
+        like_term = f"%{search_term}%"
+
+        matches = set()
+        query = (database.LxmfMessage
+                 .select(database.LxmfMessage.source_hash, database.LxmfMessage.destination_hash)
+                 .where(
+                     ((database.LxmfMessage.source_hash == local_hash) | (database.LxmfMessage.destination_hash == local_hash))
+                     & (
+                         database.LxmfMessage.title ** like_term
+                         | database.LxmfMessage.content ** like_term
+                     )
+                 ))
+
+        for message in query:
+            if message.source_hash == local_hash:
+                matches.add(message.destination_hash)
+            else:
+                matches.add(message.source_hash)
+
+        return matches
+
+    def parse_bool_query_param(self, value: str | None) -> bool:
+        if value is None:
+            return False
+        value = value.lower()
+        return value in {"1", "true", "yes", "on"}
+
     # handle receiving a new audio call
     def on_incoming_audio_call(self, audio_call: AudioCall):
         print("on_incoming_audio_call: {}".format(audio_call.link.hash.hex()))
@@ -340,13 +492,11 @@ class ReticulumMeshChat:
         @routes.get("/api/v1/reticulum/interfaces")
         async def index(request):
 
-            interfaces = {}
-            if "interfaces" in self.reticulum.config:
-                interfaces = self.reticulum.config["interfaces"]
+            interfaces = self._get_interfaces_snapshot()
 
             processed_interfaces = {}
             for interface_name, interface in interfaces.items():
-                interface_data = interface.copy()
+                interface_data = copy.deepcopy(interface)
 
                 # handle sub-interfaces for RNodeMultiInterface
                 if interface_data.get("type") == "RNodeMultiInterface":
@@ -377,23 +527,35 @@ class ReticulumMeshChat:
             data = await request.json()
             interface_name = data.get('name')
 
-            # enable interface
-            if "interfaces" in self.reticulum.config:
-                interface = self.reticulum.config["interfaces"][interface_name]
-                if "enabled" in interface:
-                    interface["enabled"] = "true"
-                if "interface_enabled" in interface:
-                    interface["interface_enabled"] = "true"
+            if interface_name is None or interface_name == "":
+                return web.json_response({
+                    "message": "Interface name is required",
+                }, status=422)
 
-                keys_to_remove = []
-                for key, value in interface.items():
-                    if value is None:
-                        keys_to_remove.append(key)
-                for key in keys_to_remove:
-                    del interface[key]
+            # enable interface
+            interfaces = self._get_interfaces_section()
+            if interface_name not in interfaces:
+                return web.json_response({
+                    "message": "Interface not found",
+                }, status=404)
+            interface = interfaces[interface_name]
+            if "enabled" in interface:
+                interface["enabled"] = "true"
+            if "interface_enabled" in interface:
+                interface["interface_enabled"] = "true"
+
+            keys_to_remove = []
+            for key, value in interface.items():
+                if value is None:
+                    keys_to_remove.append(key)
+            for key in keys_to_remove:
+                del interface[key]
 
             # save config
-            self.reticulum.config.write()
+            if not self._write_reticulum_config():
+                return web.json_response({
+                    "message": "Failed to write Reticulum config",
+                }, status=500)
 
             return web.json_response({
                 "message": "Interface is now enabled",
@@ -407,23 +569,35 @@ class ReticulumMeshChat:
             data = await request.json()
             interface_name = data.get('name')
 
-            # disable interface
-            if "interfaces" in self.reticulum.config:
-                interface = self.reticulum.config["interfaces"][interface_name]
-                if "enabled" in interface:
-                    interface["enabled"] = "false"
-                if "interface_enabled" in interface:
-                    interface["interface_enabled"] = "false"
+            if interface_name is None or interface_name == "":
+                return web.json_response({
+                    "message": "Interface name is required",
+                }, status=422)
 
-                keys_to_remove = []
-                for key, value in interface.items():
-                    if value is None:
-                        keys_to_remove.append(key)
-                for key in keys_to_remove:
-                    del interface[key]
+            # disable interface
+            interfaces = self._get_interfaces_section()
+            if interface_name not in interfaces:
+                return web.json_response({
+                    "message": "Interface not found",
+                }, status=404)
+            interface = interfaces[interface_name]
+            if "enabled" in interface:
+                interface["enabled"] = "false"
+            if "interface_enabled" in interface:
+                interface["interface_enabled"] = "false"
+
+            keys_to_remove = []
+            for key, value in interface.items():
+                if value is None:
+                    keys_to_remove.append(key)
+            for key in keys_to_remove:
+                del interface[key]
 
             # save config
-            self.reticulum.config.write()
+            if not self._write_reticulum_config():
+                return web.json_response({
+                    "message": "Failed to write Reticulum config",
+                }, status=500)
 
             return web.json_response({
                 "message": "Interface is now disabled",
@@ -437,12 +611,25 @@ class ReticulumMeshChat:
             data = await request.json()
             interface_name = data.get('name')
 
+            if interface_name is None or interface_name == "":
+                return web.json_response({
+                    "message": "Interface name is required",
+                }, status=422)
+
+            interfaces = self._get_interfaces_section()
+            if interface_name not in interfaces:
+                return web.json_response({
+                    "message": "Interface not found",
+                }, status=404)
+
             # delete interface
-            if "interfaces" in self.reticulum.config:
-                del self.reticulum.config["interfaces"][interface_name]
+            del interfaces[interface_name]
 
             # save config
-            self.reticulum.config.write()
+            if not self._write_reticulum_config():
+                return web.json_response({
+                    "message": "Failed to write Reticulum config",
+                }, status=500)
 
             return web.json_response({
                 "message": "Interface has been deleted",
@@ -471,9 +658,7 @@ class ReticulumMeshChat:
                 }, status=422)
 
             # get existing interfaces
-            interfaces = {}
-            if "interfaces" in self.reticulum.config:
-                interfaces = self.reticulum.config["interfaces"]
+            interfaces = self._get_interfaces_section()
 
             # ensure name is not for an existing interface, to prevent overwriting
             if allow_overwriting_interface is False and interface_name in interfaces:
@@ -684,7 +869,7 @@ class ReticulumMeshChat:
                 # remove any existing sub interfaces, which can be found by finding keys that contain a dict value
                 # this allows us to replace all sub interfaces with the ones we are about to add, while also ensuring
                 # that we do not remove any existing config values from the main interface config
-                for key in interface_details:
+                for key in list(interface_details.keys()):
                     value = interface_details[key]
                     if isinstance(value, dict):
                         del interface_details[key]
@@ -783,10 +968,11 @@ class ReticulumMeshChat:
 
             # merge new interface into existing interfaces
             interfaces[interface_name] = interface_details
-            self.reticulum.config["interfaces"] = interfaces
-
             # save config
-            self.reticulum.config.write()
+            if not self._write_reticulum_config():
+                return web.json_response({
+                    "message": "Failed to write Reticulum config",
+                }, status=500)
 
             if allow_overwriting_interface:
                 return web.json_response({
@@ -813,7 +999,8 @@ class ReticulumMeshChat:
 
                 # format interfaces for export
                 output = []
-                for interface_name, interface in self.reticulum.config["interfaces"].items():
+                interfaces = self._get_interfaces_snapshot()
+                for interface_name, interface in interfaces.items():
 
                     # skip interface if not selected
                     if selected_interface_names is not None and selected_interface_names != "":
@@ -913,8 +1100,12 @@ class ReticulumMeshChat:
                         del interface_config[interface_name]["enabled"]
 
                 # update reticulum config with new interfaces
-                self.reticulum.config["interfaces"].update(interface_config)
-                self.reticulum.config.write()
+                interfaces = self._get_interfaces_section()
+                interfaces.update(interface_config)
+                if not self._write_reticulum_config():
+                    return web.json_response({
+                        "message": "Failed to write Reticulum config",
+                    }, status=500)
 
                 return web.json_response({
                     "message": "Interfaces imported successfully",
@@ -1024,6 +1215,7 @@ class ReticulumMeshChat:
                     "download_stats": {
                         "avg_download_speed_bps": avg_download_speed_bps,
                     },
+                    "user_guidance": self.build_user_guidance_messages(),
                 },
             })
 
@@ -1053,8 +1245,12 @@ class ReticulumMeshChat:
         async def index(request):
 
             # enable transport mode
-            self.reticulum.config["reticulum"]["enable_transport"] = True
-            self.reticulum.config.write()
+            reticulum_config = self._get_reticulum_section()
+            reticulum_config["enable_transport"] = True
+            if not self._write_reticulum_config():
+                return web.json_response({
+                    "message": "Failed to write Reticulum config",
+                }, status=500)
 
             return web.json_response({
                 "message": "Transport has been enabled. MeshChat must be restarted for this change to take effect.",
@@ -1065,8 +1261,12 @@ class ReticulumMeshChat:
         async def index(request):
 
             # disable transport mode
-            self.reticulum.config["reticulum"]["enable_transport"] = False
-            self.reticulum.config.write()
+            reticulum_config = self._get_reticulum_section()
+            reticulum_config["enable_transport"] = False
+            if not self._write_reticulum_config():
+                return web.json_response({
+                    "message": "Failed to write Reticulum config",
+                }, status=500)
 
             return web.json_response({
                 "message": "Transport has been disabled. MeshChat must be restarted for this change to take effect.",
@@ -2032,6 +2232,15 @@ class ReticulumMeshChat:
         @routes.get("/api/v1/lxmf/conversations")
         async def index(request):
 
+            search_query = request.query.get("search", None)
+            filter_unread = self.parse_bool_query_param(request.query.get("filter_unread"))
+            filter_failed = self.parse_bool_query_param(request.query.get("filter_failed"))
+            filter_has_attachments = self.parse_bool_query_param(request.query.get("filter_has_attachments"))
+
+            search_destination_hashes = set()
+            if search_query is not None and search_query != "":
+                search_destination_hashes = self.search_destination_hashes_by_message(search_query)
+
             # sql query to fetch unique source/destination hash pairs ordered by the most recently updated message
             query = """
             WITH NormalizedMessages AS (
@@ -2068,6 +2277,19 @@ class ReticulumMeshChat:
                 else:
                     other_user_hash = source_hash
 
+                latest_message = self.get_conversation_latest_message(other_user_hash)
+                latest_message_title = None
+                latest_message_preview = None
+                latest_message_created_at = None
+                latest_message_has_attachments = False
+                if latest_message is not None:
+                    latest_message_title = latest_message.title
+                    latest_message_preview = latest_message.content
+                    latest_message_created_at = latest_message.created_at
+                    latest_message_has_attachments = self.message_fields_have_attachments(latest_message.fields)
+
+                has_attachments = self.conversation_has_attachments(other_user_hash)
+
                 # find lxmf user icon from database
                 lxmf_user_icon = None
                 db_lxmf_user_icon = database.LxmfUserIcon.get_or_none(database.LxmfUserIcon.destination_hash == other_user_hash)
@@ -2085,11 +2307,39 @@ class ReticulumMeshChat:
                     "destination_hash": other_user_hash,
                     "is_unread": self.is_lxmf_conversation_unread(other_user_hash),
                     "failed_messages_count": self.lxmf_conversation_failed_messages_count(other_user_hash),
+                    "has_attachments": has_attachments,
+                    "latest_message_title": latest_message_title,
+                    "latest_message_preview": latest_message_preview,
+                    "latest_message_created_at": latest_message_created_at,
+                    "latest_message_has_attachments": latest_message_has_attachments,
                     "lxmf_user_icon": lxmf_user_icon,
                     # we say the conversation was updated when the latest message was created
                     # otherwise this will go crazy when sending a message, as the updated_at on the latest message changes very frequently
                     "updated_at": created_at,
                 })
+
+            if search_query is not None and search_query != "":
+                lowered_query = search_query.lower()
+                filtered = []
+                for conversation in conversations:
+                    matches_display = conversation["display_name"] and lowered_query in conversation["display_name"].lower()
+                    matches_custom = conversation["custom_display_name"] and lowered_query in conversation["custom_display_name"].lower()
+                    matches_destination = conversation["destination_hash"] and lowered_query in conversation["destination_hash"].lower()
+                    matches_latest_title = conversation["latest_message_title"] and lowered_query in conversation["latest_message_title"].lower()
+                    matches_latest_preview = conversation["latest_message_preview"] and lowered_query in conversation["latest_message_preview"].lower()
+                    matches_history = conversation["destination_hash"] in search_destination_hashes
+                    if matches_display or matches_custom or matches_destination or matches_latest_title or matches_latest_preview or matches_history:
+                        filtered.append(conversation)
+                conversations = filtered
+
+            if filter_unread:
+                conversations = [c for c in conversations if c["is_unread"]]
+
+            if filter_failed:
+                conversations = [c for c in conversations if c["failed_messages_count"] > 0]
+
+            if filter_has_attachments:
+                conversations = [c for c in conversations if c["has_attachments"]]
 
             return web.json_response({
                 "conversations": conversations,

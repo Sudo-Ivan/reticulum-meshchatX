@@ -1,10 +1,16 @@
 import axios from 'axios';
-import {createApp} from 'vue';
+import { createApp } from 'vue';
 import "./style.css";
 import CallPage from "./components/call/CallPage.vue";
+import { ensureCodec2ScriptsLoaded } from "./js/Codec2Loader";
 
 // provide axios globally
 window.axios = axios;
 
-createApp(CallPage)
-    .mount('#app');
+async function bootstrap() {
+    await ensureCodec2ScriptsLoaded();
+    createApp(CallPage)
+        .mount('#app');
+}
+
+bootstrap();

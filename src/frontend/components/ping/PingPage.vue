@@ -1,59 +1,85 @@
 <template>
-    <div class="flex flex-col flex-1 overflow-hidden min-w-full sm:min-w-[500px] dark:bg-zinc-950">
-        <div class="flex flex-col h-full space-y-2 p-2 overflow-y-auto">
+    <div class="flex flex-col flex-1 overflow-hidden min-w-full sm:min-w-[500px] bg-gradient-to-br from-slate-50 via-slate-100 to-white dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-900">
+        <div class="flex-1 overflow-y-auto w-full px-4 md:px-8 py-6">
+            <div class="space-y-4 w-full max-w-4xl mx-auto">
 
-            <!-- appearance -->
-            <div class="bg-white dark:bg-zinc-800 rounded shadow">
-                <div class="flex border-b border-gray-300 dark:border-zinc-700 text-gray-700 dark:text-gray-200 p-2 font-semibold">Ping</div>
-                <div class="dark:divide-zinc-700 text-gray-900 dark:text-gray-100 p-2">
-                    Only lxmf.delivery destinations can be pinged.
-                </div>
-            </div>
+                <div class="glass-card space-y-5">
+                    <div class="space-y-2">
+                        <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Diagnostics</div>
+                        <div class="text-2xl font-semibold text-gray-900 dark:text-white">Ping Mesh Peers</div>
+                        <div class="text-sm text-gray-600 dark:text-gray-300">Only <code class="font-mono text-xs">lxmf.delivery</code> destinations respond to ping.</div>
+                    </div>
 
-            <!-- inputs -->
-            <div class="bg-white dark:bg-zinc-800 rounded shadow">
-                <div class="divide-y divide-gray-300 dark:divide-zinc-700 text-gray-900 dark:text-gray-100">
-
-                    <div class="p-2">
-                        <div class="text-sm font-medium text-gray-900 dark:text-gray-100">Destination Hash</div>
-                        <div class="flex">
-                            <input v-model="destinationHash" type="text" placeholder="e.g: 7b746057a7294469799cd8d7d429676a" class="bg-gray-50 dark:bg-zinc-700 border border-gray-300 dark:border-zinc-600 text-gray-900 dark:text-gray-100 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 dark:focus:ring-blue-600 dark:focus:border-blue-600 block w-full p-2.5">
+                    <div class="grid md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="glass-label">Destination Hash</label>
+                            <input v-model="destinationHash" type="text" placeholder="e.g. 7b746057a7294469799cd8d7d429676a" class="input-field font-mono"/>
+                        </div>
+                        <div>
+                            <label class="glass-label">Ping Timeout (seconds)</label>
+                            <input v-model="timeout" type="number" min="1" class="input-field"/>
                         </div>
                     </div>
 
-                    <div class="p-2">
-                        <div class="text-sm font-medium text-gray-900 dark:text-gray-100">Ping Timeout (seconds)</div>
-                        <div class="flex">
-                            <input v-model="timeout" type="number" placeholder="Timeout" class="bg-gray-50 dark:bg-zinc-700 border border-gray-300 dark:border-zinc-600 text-gray-900 dark:text-gray-100 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 dark:focus:ring-blue-600 dark:focus:border-blue-600 block w-full p-2.5">
-                        </div>
-                    </div>
-
-                    <div class="p-2 space-x-1">
-                        <button v-if="!isRunning" @click="start" type="button" class="my-auto inline-flex items-center gap-x-1 rounded-md bg-gray-500 px-2 py-1 text-sm font-semibold text-white shadow-sm hover:bg-gray-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 dark:bg-zinc-700 dark:text-white dark:hover:bg-zinc-600 dark:focus-visible:outline-zinc-500">
-                            Start
+                    <div class="flex flex-wrap gap-2">
+                        <button v-if="!isRunning" @click="start" type="button" class="primary-chip px-4 py-2 text-sm">
+                            <MaterialDesignIcon icon-name="play" class="w-4 h-4"/>
+                            Start Ping
                         </button>
-                        <button v-if="isRunning" @click="stop" type="button" class="my-auto inline-flex items-center gap-x-1 rounded-md bg-gray-500 px-2 py-1 text-sm font-semibold text-white shadow-sm hover:bg-gray-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 dark:bg-zinc-700 dark:text-white dark:hover:bg-zinc-600 dark:focus-visible:outline-zinc-500">
+                        <button v-else @click="stop" type="button" class="secondary-chip px-4 py-2 text-sm text-red-600 dark:text-red-300 border-red-200 dark:border-red-500/50">
+                            <MaterialDesignIcon icon-name="pause" class="w-4 h-4"/>
                             Stop
                         </button>
-                        <button @click="clear" type="button" class="my-auto inline-flex items-center gap-x-1 rounded-md bg-gray-500 px-2 py-1 text-sm font-semibold text-white shadow-sm hover:bg-gray-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 dark:bg-zinc-700 dark:text-white dark:hover:bg-zinc-600 dark:focus-visible:outline-zinc-500">
+                        <button @click="clear" type="button" class="secondary-chip px-4 py-2 text-sm">
+                            <MaterialDesignIcon icon-name="broom" class="w-4 h-4"/>
                             Clear Results
                         </button>
-                        <button @click="dropPath" type="button" class="my-auto inline-flex items-center gap-x-1 rounded-md bg-red-500 px-2 py-1 text-sm font-semibold text-white shadow-sm hover:bg-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500">
+                        <button @click="dropPath" type="button" class="inline-flex items-center gap-2 rounded-full bg-red-600/90 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-red-500 transition">
+                            <MaterialDesignIcon icon-name="link-variant-remove" class="w-4 h-4"/>
                             Drop Path
                         </button>
                     </div>
 
+                    <div class="flex flex-wrap gap-2 text-xs font-semibold">
+                        <span :class="[isRunning ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200' : 'bg-gray-200 text-gray-700 dark:bg-zinc-800 dark:text-gray-200', 'rounded-full px-3 py-1']">
+                            Status: {{ isRunning ? 'Running' : 'Idle' }}
+                        </span>
+                        <span v-if="lastPingSummary?.duration" class="rounded-full px-3 py-1 bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+                            Last RTT: {{ lastPingSummary.duration }}
+                        </span>
+                        <span v-if="lastPingSummary?.error" class="rounded-full px-3 py-1 bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-200">
+                            Last Error: {{ lastPingSummary.error }}
+                        </span>
+                    </div>
                 </div>
-            </div>
 
-            <!-- results -->
-            <div class="flex flex-col h-full bg-white dark:bg-zinc-800 rounded shadow overflow-hidden min-h-52">
-                <div class="flex border-b border-gray-300 dark:border-zinc-700 text-gray-700 dark:text-gray-200 p-2 font-semibold">Results</div>
-                <div id="results" class="flex flex-col h-full bg-black text-white dark:bg-zinc-800 dark:text-gray-200 p-2 overflow-y-auto overflow-x-auto font-mono whitespace-nowrap">
-                    <div v-for="pingResult of pingResults" class="w-fit">{{ pingResult }}</div>
+                <div class="glass-card flex flex-col min-h-[320px] space-y-3">
+                    <div class="flex items-center justify-between gap-4">
+                        <div>
+                            <div class="text-sm font-semibold text-gray-900 dark:text-white">Console Output</div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">Streaming seq responses in real time</div>
+                        </div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400">
+                            seq #{{ seq }}
+                        </div>
+                    </div>
+
+                    <div v-if="lastPingSummary && !lastPingSummary.error" class="flex flex-wrap gap-2 text-xs text-gray-700 dark:text-gray-200">
+                        <span v-if="lastPingSummary.hopsThere != null" class="stat-chip">Hops there: {{ lastPingSummary.hopsThere }}</span>
+                        <span v-if="lastPingSummary.hopsBack != null" class="stat-chip">Hops back: {{ lastPingSummary.hopsBack }}</span>
+                        <span v-if="lastPingSummary.rssi != null" class="stat-chip">RSSI {{ lastPingSummary.rssi }} dBm</span>
+                        <span v-if="lastPingSummary.snr != null" class="stat-chip">SNR {{ lastPingSummary.snr }} dB</span>
+                        <span v-if="lastPingSummary.quality != null" class="stat-chip">Quality {{ lastPingSummary.quality }}%</span>
+                        <span v-if="lastPingSummary.via" class="stat-chip">Interface {{ lastPingSummary.via }}</span>
+                    </div>
+
+                    <div id="results" class="flex-1 overflow-y-auto rounded-2xl bg-black/80 text-emerald-300 font-mono text-xs p-3 space-y-1 shadow-inner border border-zinc-900">
+                        <div v-if="pingResults.length === 0" class="text-emerald-500/80">No pings yet. Start a run to collect RTT data.</div>
+                        <div v-for="(pingResult, index) in pingResults" :key="`${index}-${pingResult}`" class="whitespace-pre-wrap">{{ pingResult }}</div>
+                    </div>
                 </div>
-            </div>
 
+            </div>
         </div>
     </div>
 </template>
@@ -61,9 +87,13 @@
 <script>
 import {CanceledError} from "axios";
 import DialogUtils from "../../js/DialogUtils";
+import MaterialDesignIcon from "../MaterialDesignIcon.vue";
 
 export default {
     name: 'PingPage',
+    components: {
+        MaterialDesignIcon,
+    },
     data() {
         return {
             isRunning: false,
@@ -72,6 +102,7 @@ export default {
             seq: 0,
             pingResults: [],
             abortController: null,
+            lastPingSummary: null,
         };
     },
     beforeUnmount() {
@@ -116,10 +147,13 @@ export default {
         },
         async stop() {
             this.isRunning = false;
-            this.abortController.abort();
+            if(this.abortController){
+                this.abortController.abort();
+            }
         },
         async clear() {
             this.pingResults = [];
+             this.lastPingSummary = null;
         },
         async sleep(millis) {
             return new Promise((resolve, reject) => setTimeout(resolve, millis));
@@ -168,6 +202,15 @@ export default {
 
                 // update ui
                 this.addPingResult(info.join(" "));
+                this.lastPingSummary = {
+                    duration: rttDurationString,
+                    hopsThere: pingResult.hops_there,
+                    hopsBack: pingResult.hops_back,
+                    rssi: pingResult.rssi,
+                    snr: pingResult.snr,
+                    quality: pingResult.quality,
+                    via: pingResult.receiving_interface,
+                };
 
             } catch(e) {
 
@@ -181,6 +224,9 @@ export default {
                 // add ping error to results
                 const message = e.response?.data?.message ?? e;
                 this.addPingResult(`seq=${this.seq} error=${message}`);
+                this.lastPingSummary = {
+                    error: typeof message === "string" ? message : JSON.stringify(message),
+                };
 
             }
         },

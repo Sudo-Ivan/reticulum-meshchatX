@@ -21,8 +21,8 @@
     "electron-builder": "^24.6.3"
   },
   "build": {
-    "appId": "com.liamcottle.reticulummeshchat",
-    "productName": "Reticulum MeshChat",
+    "appId": "com.sudoivan.reticulummeshchat",
+    "productName": "Reticulum MeshChatX",
     "asar": false,
     "files": [
       "electron/**/*"
@@ -74,7 +74,7 @@
         "AppImage",
         "deb"
       ],
-      "maintainer": "Liam Cottle <liam@liamcottle.com>",
+      "maintainer": "Sudo-Ivan",
       "extraFiles": [
         {
           "from": "build/exe",

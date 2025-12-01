@@ -1,13 +1,21 @@
 <template>
 
     <MessagesSidebar
+        v-if="!isPopoutMode"
         :conversations="conversations"
         :peers="peers"
         :selected-destination-hash="selectedPeer?.destination_hash"
+        :conversation-search-term="conversationSearchTerm"
+        :filter-unread-only="filterUnreadOnly"
+        :filter-failed-only="filterFailedOnly"
+        :filter-has-attachments-only="filterHasAttachmentsOnly"
+        :is-loading="isLoadingConversations"
         @conversation-click="onConversationClick"
-        @peer-click="onPeerClick"/>
+        @peer-click="onPeerClick"
+        @conversation-search-changed="onConversationSearchChanged"
+        @conversation-filter-changed="onConversationFilterChanged"/>
 
-    <div class="flex flex-col flex-1 overflow-hidden min-w-full sm:min-w-[500px] dark:bg-zinc-950">
+    <div class="flex flex-col flex-1 overflow-hidden min-w-full sm:min-w-[500px] bg-gradient-to-br from-white via-slate-50 to-slate-100 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-900/80">
 
         <!-- messages tab -->
         <ConversationViewer
@@ -45,6 +53,7 @@ export default {
         return {
 
             reloadInterval: null,
+            conversationRefreshTimeout: null,
 
             config: null,
             peers: {},
@@ -53,11 +62,18 @@ export default {
             conversations: [],
             lxmfDeliveryAnnounces: [],
 
+            conversationSearchTerm: "",
+            filterUnreadOnly: false,
+            filterFailedOnly: false,
+            filterHasAttachmentsOnly: false,
+            isLoadingConversations: false,
+
         };
     },
     beforeUnmount() {
 
         clearInterval(this.reloadInterval);
+        clearTimeout(this.conversationRefreshTimeout);
 
         // stop listening for websocket messages
         WebSocketConnection.off("message", this.onWebsocketMessage);
@@ -200,12 +216,33 @@ export default {
         },
         async getConversations() {
             try {
-                const response = await window.axios.get(`/api/v1/lxmf/conversations`);
+            this.isLoadingConversations = true;
+                const response = await window.axios.get(`/api/v1/lxmf/conversations`, {
+                    params: this.buildConversationQueryParams(),
+                });
                 this.conversations = response.data.conversations;
             } catch(e) {
                 // do nothing if failed to load conversations
                 console.log(e);
+            } finally {
+                this.isLoadingConversations = false;
             }
+        },
+        buildConversationQueryParams() {
+            const params = {};
+            if(this.conversationSearchTerm && this.conversationSearchTerm.trim() !== ""){
+                params.search = this.conversationSearchTerm.trim();
+            }
+            if(this.filterUnreadOnly){
+                params.filter_unread = true;
+            }
+            if(this.filterFailedOnly){
+                params.filter_failed = true;
+            }
+            if(this.filterHasAttachmentsOnly){
+                params.filter_has_attachments = true;
+            }
+            return params;
         },
         updatePeerFromAnnounce: function(announce) {
             this.peers[announce.destination_hash] = announce;
@@ -216,12 +253,17 @@ export default {
             this.selectedPeer = peer;
 
             // update current route
-            this.$router.replace({
-                name: "messages",
+            const routeName = this.isPopoutMode ? "messages-popout" : "messages";
+            const routeOptions = {
+                name: routeName,
                 params: {
                     destinationHash: peer.destination_hash,
                 },
-            });
+            };
+            if(!this.isPopoutMode && this.$route?.query){
+                routeOptions.query = { ...this.$route.query };
+            }
+            this.$router.replace(routeOptions);
 
         },
         onConversationClick: function(conversation) {
@@ -238,11 +280,57 @@ export default {
             // clear selected peer
             this.selectedPeer = null;
 
-            // update current route
-            this.$router.replace({
-                name: "messages",
-            });
+            if(this.isPopoutMode){
+                window.close();
+                return;
+            }
 
+            // update current route
+            const routeName = this.isPopoutMode ? "messages-popout" : "messages";
+            const routeOptions = { name: routeName };
+            if(!this.isPopoutMode && this.$route?.query){
+                routeOptions.query = { ...this.$route.query };
+            }
+            this.$router.replace(routeOptions);
+
+        },
+        requestConversationsRefresh() {
+            if(this.conversationRefreshTimeout){
+                clearTimeout(this.conversationRefreshTimeout);
+            }
+            this.conversationRefreshTimeout = setTimeout(() => {
+                this.getConversations();
+            }, 250);
+        },
+        onConversationSearchChanged(term) {
+            this.conversationSearchTerm = term;
+            this.requestConversationsRefresh();
+        },
+        onConversationFilterChanged(filterKey) {
+            if(filterKey === 'unread'){
+                this.filterUnreadOnly = !this.filterUnreadOnly;
+            } else if(filterKey === 'failed'){
+                this.filterFailedOnly = !this.filterFailedOnly;
+            } else if(filterKey === 'attachments'){
+                this.filterHasAttachmentsOnly = !this.filterHasAttachmentsOnly;
+            }
+            this.requestConversationsRefresh();
+        },
+        getHashPopoutValue() {
+            const hash = window.location.hash || "";
+            const match = hash.match(/popout=([^&]+)/);
+            return match ? decodeURIComponent(match[1]) : null;
+        },
+    },
+    computed: {
+        popoutRouteType() {
+            if(this.$route?.meta?.popoutType){
+                return this.$route.meta.popoutType;
+            }
+            return this.$route?.query?.popout ?? this.getHashPopoutValue();
+        },
+        isPopoutMode() {
+            return this.popoutRouteType === "conversation";
         },
     },
     watch: {

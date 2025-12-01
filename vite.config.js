@@ -28,6 +28,52 @@ export default {
                 call: path.join(__dirname, "src", "frontend", "call.html"),
 
             },
+            output: {
+                manualChunks(id) {
+                    if (id.includes('node_modules')) {
+                        if (id.includes('vuetify')) {
+                            return 'vendor-vuetify';
+                        }
+                        if (id.includes('vis-network') || id.includes('vis-data')) {
+                            return 'vendor-vis';
+                        }
+                        if (id.includes('vue-router')) {
+                            return 'vendor-vue-router';
+                        }
+                        if (id.includes('vue')) {
+                            return 'vendor-vue';
+                        }
+                        if (id.includes('protobufjs') || id.includes('@protobufjs')) {
+                            return 'vendor-protobuf';
+                        }
+                        if (id.includes('moment')) {
+                            return 'vendor-moment';
+                        }
+                        if (id.includes('axios')) {
+                            return 'vendor-axios';
+                        }
+                        if (id.includes('@mdi/js')) {
+                            return 'vendor-mdi';
+                        }
+                        if (id.includes('compressorjs')) {
+                            return 'vendor-compressor';
+                        }
+                        if (id.includes('click-outside-vue3')) {
+                            return 'vendor-click-outside';
+                        }
+                        if (id.includes('mitt')) {
+                            return 'vendor-mitt';
+                        }
+                        if (id.includes('micron-parser')) {
+                            return 'vendor-micron';
+                        }
+                        if (id.includes('electron-prompt')) {
+                            return 'vendor-electron-prompt';
+                        }
+                        return 'vendor-other';
+                    }
+                },
+            },
         },
     },
 

@@ -1,11 +1,9 @@
 <template>
-    <div class="inline-flex rounded-md shadow-sm">
+    <div class="inline-flex">
 
-        <button @click="showMenu" type="button" class="my-auto mr-1 inline-flex items-center gap-x-1 rounded-md bg-gray-500 px-2.5 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-gray-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 dark:bg-zinc-800 dark:text-white dark:hover:bg-zinc-700 dark:focus-visible:outline-zinc-500">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-5">
-                <path fill-rule="evenodd" d="M1.5 6a2.25 2.25 0 0 1 2.25-2.25h16.5A2.25 2.25 0 0 1 22.5 6v12a2.25 2.25 0 0 1-2.25 2.25H3.75A2.25 2.25 0 0 1 1.5 18V6ZM3 16.06V18c0 .414.336.75.75.75h16.5A.75.75 0 0 0 21 18v-1.94l-2.69-2.689a1.5 1.5 0 0 0-2.12 0l-.88.879.97.97a.75.75 0 1 1-1.06 1.06l-5.16-5.159a1.5 1.5 0 0 0-2.12 0L3 16.061Zm10.125-7.81a1.125 1.125 0 1 1 2.25 0 1.125 1.125 0 0 1-2.25 0Z" clip-rule="evenodd" />
-            </svg>
-            <span class="ml-1 hidden xl:inline-block whitespace-nowrap">Add Image</span>
+        <button @click="showMenu" type="button" class="my-auto inline-flex items-center gap-x-1 rounded-full border border-gray-200 dark:border-zinc-700 bg-white/90 dark:bg-zinc-900/80 px-3 py-1.5 text-xs font-semibold text-gray-800 dark:text-gray-100 shadow-sm hover:border-blue-400 dark:hover:border-blue-500 transition">
+            <MaterialDesignIcon icon-name="image-plus" class="w-4 h-4"/>
+            <span class="hidden xl:inline-block whitespace-nowrap">Add Image</span>
         </button>
 
         <div class="relative block">
@@ -36,8 +34,12 @@
 <script>
 import Compressor from 'compressorjs';
 import DialogUtils from "../../js/DialogUtils";
+import MaterialDesignIcon from "../MaterialDesignIcon.vue";
 export default {
     name: 'AddImageButton',
+    components: {
+        MaterialDesignIcon,
+    },
     emits: [
         "add-image",
     ],

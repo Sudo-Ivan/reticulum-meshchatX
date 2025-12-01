@@ -1,253 +1,200 @@
 <template>
-    <div class="flex flex-col flex-1 overflow-hidden min-w-full sm:min-w-[500px] dark:bg-zinc-950">
-        <div class="overflow-y-auto space-y-2 p-2">
+    <div class="flex flex-col flex-1 overflow-hidden min-w-full sm:min-w-[500px] bg-gradient-to-br from-slate-50 via-slate-100 to-white dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-900">
+        <div class="flex-1 overflow-y-auto w-full px-4 md:px-8 py-6">
+            <div class="space-y-4 w-full max-w-6xl mx-auto">
 
-            <!-- app info -->
-            <div v-if="appInfo" class="bg-white dark:bg-zinc-900 rounded shadow">
-                <div class="flex border-b border-gray-300 dark:border-zinc-700 text-gray-700 dark:text-zinc-200 p-2 font-semibold">App Info</div>
-                <div class="divide-y divide-gray-200 dark:divide-zinc-800 text-gray-900 dark:text-zinc-200">
+            <div v-if="appInfo" class="glass-card">
+                <div class="flex flex-col gap-4 md:flex-row md:items-center">
+                    <div class="flex-1 space-y-2">
+                        <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">About</div>
+                        <div class="text-3xl font-semibold text-gray-900 dark:text-white">Reticulum MeshChatX</div>
+                        <div class="text-sm text-gray-600 dark:text-gray-300">
+                            v{{ appInfo.version }} • RNS {{ appInfo.rns_version }} • LXMF {{ appInfo.lxmf_version }} • Python {{ appInfo.python_version }}
+                        </div>
+                    </div>
+                    <div v-if="isElectron" class="flex flex-col sm:flex-row gap-2">
+                        <button @click="relaunch" type="button" class="primary-chip px-4 py-2 text-sm justify-center">
+                            <MaterialDesignIcon icon-name="restart" class="w-4 h-4"/>
+                            Restart App
+                        </button>
+                    </div>
+                </div>
+                <div class="grid gap-3 sm:grid-cols-3 mt-4 text-sm text-gray-700 dark:text-gray-300">
+                    <div>
+                        <div class="glass-label">Config path</div>
+                        <div class="monospace-field break-all">{{ appInfo.reticulum_config_path }}</div>
+                        <button v-if="isElectron" @click="showReticulumConfigFile" type="button" class="secondary-chip mt-2 text-xs">
+                            <MaterialDesignIcon icon-name="folder" class="w-4 h-4"/>
+                            Reveal
+                        </button>
+                    </div>
+                    <div>
+                        <div class="glass-label">Database path</div>
+                        <div class="monospace-field break-all">{{ appInfo.database_path }}</div>
+                        <button v-if="isElectron" @click="showDatabaseFile" type="button" class="secondary-chip mt-2 text-xs">
+                            <MaterialDesignIcon icon-name="database" class="w-4 h-4"/>
+                            Reveal
+                        </button>
+                    </div>
+                    <div>
+                        <div class="glass-label">Database size</div>
+                        <div class="text-lg font-semibold text-gray-900 dark:text-white">{{ formatBytes(appInfo.database_file_size) }}</div>
+                    </div>
+                </div>
+            </div>
 
-                    <!-- version -->
-                    <div class="flex p-1">
-                        <div class="mr-auto">
-                            <div>Versions</div>
-                            <div class="text-sm text-gray-700 dark:text-zinc-400">
-                                MeshChat v{{ appInfo.version }} • RNS v{{ appInfo.rns_version }} • LXMF v{{ appInfo.lxmf_version }} • Python v{{ appInfo.python_version }}
+            <div class="grid gap-4 lg:grid-cols-2">
+                <div v-if="appInfo?.memory_usage" class="glass-card space-y-3">
+                    <header class="flex items-center gap-2">
+                        <MaterialDesignIcon icon-name="chip" class="w-5 h-5 text-blue-500"/>
+                        <div>
+                            <div class="text-lg font-semibold text-gray-900 dark:text-white">System Resources</div>
+                            <div class="text-xs text-emerald-500 flex items-center gap-1">
+                                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                Live
                             </div>
                         </div>
-                        <div class="hidden sm:block mx-2 my-auto">
-                            <a target="_blank" 
-                                href="https://github.com/liamcottle/reticulum-meshchat/releases" 
-                                type="button" 
-                                class="my-auto inline-flex items-center gap-x-1 rounded-md bg-gray-500 dark:bg-zinc-700 px-2 py-1 text-sm font-semibold text-white shadow-sm hover:bg-gray-400 dark:hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 dark:focus-visible:outline-zinc-600">
-                                Check for Updates
-                            </a>
+                    </header>
+                    <div class="metric-row">
+                        <div>
+                            <div class="glass-label">Memory (RSS)</div>
+                            <div class="metric-value">{{ formatBytes(appInfo.memory_usage.rss) }}</div>
+                        </div>
+                        <div>
+                            <div class="glass-label">Virtual Memory</div>
+                            <div class="metric-value">{{ formatBytes(appInfo.memory_usage.vms) }}</div>
                         </div>
                     </div>
+                </div>
 
-                    <!-- reticulum config path -->
-                    <div class="flex p-1">
-                        <div class="mr-auto">
-                            <div>Reticulum Config Path</div>
-                            <div class="text-sm text-gray-700 dark:text-zinc-400 break-all">{{ appInfo.reticulum_config_path }}</div>
+                <div v-if="appInfo?.network_stats" class="glass-card space-y-3">
+                    <header class="flex items-center gap-2">
+                        <MaterialDesignIcon icon-name="access-point-network" class="w-5 h-5 text-purple-500"/>
+                        <div>
+                            <div class="text-lg font-semibold text-gray-900 dark:text-white">Network Stats</div>
+                            <div class="text-xs text-emerald-500 flex items-center gap-1">
+                                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                Live
+                            </div>
                         </div>
-                        <div v-if="isElectron" class="mx-2 my-auto">
-                            <button @click="showReticulumConfigFile" 
-                                type="button" 
-                                class="my-auto inline-flex items-center gap-x-1 rounded-md bg-gray-500 dark:bg-zinc-700 px-2 py-1 text-sm font-semibold text-white shadow-sm hover:bg-gray-400 dark:hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 dark:focus-visible:outline-zinc-600">
-                                Show in Folder
-                            </button>
+                    </header>
+                    <div class="metric-row">
+                        <div>
+                            <div class="glass-label">Sent</div>
+                            <div class="metric-value">{{ formatBytes(appInfo.network_stats.bytes_sent) }}</div>
                         </div>
-                    </div>
-
-                    <!-- database path -->
-                    <div class="flex p-1">
-                        <div class="mr-auto">
-                            <div>Database Path</div>
-                            <div class="text-sm text-gray-700 dark:text-zinc-400 break-all">{{ appInfo.database_path }}</div>
-                        </div>
-                        <div v-if="isElectron" class="mx-2 my-auto">
-                            <button @click="showDatabaseFile" 
-                                type="button" 
-                                class="my-auto inline-flex items-center gap-x-1 rounded-md bg-gray-500 dark:bg-zinc-700 px-2 py-1 text-sm font-semibold text-white shadow-sm hover:bg-gray-400 dark:hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 dark:focus-visible:outline-zinc-600">
-                                Show in Folder
-                            </button>
+                        <div>
+                            <div class="glass-label">Received</div>
+                            <div class="metric-value">{{ formatBytes(appInfo.network_stats.bytes_recv) }}</div>
                         </div>
                     </div>
-
-                    <!-- database file size -->
-                    <div class="p-1">
-                        <div>Database File Size</div>
-                        <div class="text-sm text-gray-700 dark:text-zinc-400">{{ formatBytes(appInfo.database_file_size) }}</div>
+                    <div class="metric-row">
+                        <div>
+                            <div class="glass-label">Packets Sent</div>
+                            <div class="metric-value">{{ formatNumber(appInfo.network_stats.packets_sent) }}</div>
+                        </div>
+                        <div>
+                            <div class="glass-label">Packets Received</div>
+                            <div class="metric-value">{{ formatNumber(appInfo.network_stats.packets_recv) }}</div>
+                        </div>
                     </div>
+                </div>
 
+                <div v-if="appInfo?.reticulum_stats" class="glass-card space-y-3">
+                    <header class="flex items-center gap-2">
+                        <MaterialDesignIcon icon-name="diagram-projector" class="w-5 h-5 text-indigo-500"/>
+                        <div>
+                            <div class="text-lg font-semibold text-gray-900 dark:text-white">Reticulum Stats</div>
+                            <div class="text-xs text-emerald-500 flex items-center gap-1">
+                                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                Live
+                            </div>
+                        </div>
+                    </header>
+                    <div class="metric-grid">
+                        <div>
+                            <div class="glass-label">Total Paths</div>
+                            <div class="metric-value">{{ formatNumber(appInfo.reticulum_stats.total_paths) }}</div>
+                        </div>
+                        <div>
+                            <div class="glass-label">Announces / sec</div>
+                            <div class="metric-value">{{ formatNumber(appInfo.reticulum_stats.announces_per_second) }}</div>
+                        </div>
+                        <div>
+                            <div class="glass-label">Announces / min</div>
+                            <div class="metric-value">{{ formatNumber(appInfo.reticulum_stats.announces_per_minute) }}</div>
+                        </div>
+                        <div>
+                            <div class="glass-label">Announces / hr</div>
+                            <div class="metric-value">{{ formatNumber(appInfo.reticulum_stats.announces_per_hour) }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="appInfo?.download_stats" class="glass-card space-y-3">
+                    <header class="flex items-center gap-2">
+                        <MaterialDesignIcon icon-name="download" class="w-5 h-5 text-sky-500"/>
+                        <div>
+                            <div class="text-lg font-semibold text-gray-900 dark:text-white">Download Activity</div>
+                            <div class="text-xs text-emerald-500 flex items-center gap-1">
+                                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                Live
+                            </div>
+                        </div>
+                    </header>
+                    <div class="metric-value">
+                        <span v-if="appInfo.download_stats.avg_download_speed_bps !== null">
+                            {{ formatBytesPerSecond(appInfo.download_stats.avg_download_speed_bps) }}
+                        </span>
+                        <span v-else class="text-sm text-gray-500">No downloads yet</span>
+                    </div>
                 </div>
             </div>
 
-            <!-- system resources -->
-            <div v-if="appInfo && appInfo.memory_usage" class="bg-white dark:bg-zinc-900 rounded shadow">
-                <div class="flex border-b border-gray-300 dark:border-zinc-700 text-gray-700 dark:text-zinc-200 p-2 font-semibold">
-                    System Resources
-                    <span class="ml-auto text-xs text-green-600 dark:text-green-400 flex items-center">
-                        <span class="w-2 h-2 bg-green-500 rounded-full mr-1 animate-pulse"></span>
-                        Live
+            <div v-if="appInfo" class="glass-card space-y-3">
+                <div class="text-lg font-semibold text-gray-900 dark:text-white">Runtime Status</div>
+                <div class="flex flex-wrap gap-3">
+                    <span :class="statusPillClass(!appInfo.is_connected_to_shared_instance)">
+                        <MaterialDesignIcon icon-name="server" class="w-4 h-4"/>
+                        {{ appInfo.is_connected_to_shared_instance ? 'Shared Instance' : 'Standalone Instance' }}
+                    </span>
+                    <span :class="statusPillClass(appInfo.is_transport_enabled)">
+                        <MaterialDesignIcon icon-name="transit-connection" class="w-4 h-4"/>
+                        {{ appInfo.is_transport_enabled ? 'Transport Enabled' : 'Transport Disabled' }}
                     </span>
                 </div>
-                <div class="divide-y divide-gray-200 dark:divide-zinc-800 text-gray-900 dark:text-zinc-200">
-
-                    <!-- memory usage -->
-                    <div class="flex p-1">
-                        <div class="mr-auto">
-                            <div>Memory Usage (RSS)</div>
-                            <div class="text-sm text-gray-700 dark:text-zinc-400">{{ formatBytes(appInfo.memory_usage.rss) }}</div>
-                        </div>
-                    </div>
-
-                    <!-- virtual memory -->
-                    <div class="flex p-1">
-                        <div class="mr-auto">
-                            <div>Virtual Memory Size</div>
-                            <div class="text-sm text-gray-700 dark:text-zinc-400">{{ formatBytes(appInfo.memory_usage.vms) }}</div>
-                        </div>
-                    </div>
-
-                </div>
             </div>
 
-            <!-- network statistics -->
-            <div v-if="appInfo && appInfo.network_stats" class="bg-white dark:bg-zinc-900 rounded shadow">
-                <div class="flex border-b border-gray-300 dark:border-zinc-700 text-gray-700 dark:text-zinc-200 p-2 font-semibold">
-                    Network Statistics
-                    <span class="ml-auto text-xs text-green-600 dark:text-green-400 flex items-center">
-                        <span class="w-2 h-2 bg-green-500 rounded-full mr-1 animate-pulse"></span>
-                        Live
-                    </span>
-                </div>
-                <div class="divide-y divide-gray-200 dark:divide-zinc-800 text-gray-900 dark:text-zinc-200">
-
-                    <!-- bytes sent -->
-                    <div class="flex p-1">
-                        <div class="mr-auto">
-                            <div>Data Sent</div>
-                            <div class="text-sm text-gray-700 dark:text-zinc-400">{{ formatBytes(appInfo.network_stats.bytes_sent) }}</div>
-                        </div>
+            <div v-if="config" class="glass-card space-y-4">
+                <div class="text-lg font-semibold text-gray-900 dark:text-white">Identity & Addresses</div>
+                <div class="grid gap-3 md:grid-cols-2">
+                    <div class="address-card">
+                        <div class="glass-label">Identity Hash</div>
+                        <div class="monospace-field break-all">{{ config.identity_hash }}</div>
+                        <button @click="copyValue(config.identity_hash, 'Identity Hash')" type="button" class="secondary-chip mt-3 text-xs">
+                            <MaterialDesignIcon icon-name="content-copy" class="w-4 h-4"/>
+                            Copy
+                        </button>
                     </div>
-
-                    <!-- bytes received -->
-                    <div class="flex p-1">
-                        <div class="mr-auto">
-                            <div>Data Received</div>
-                            <div class="text-sm text-gray-700 dark:text-zinc-400">{{ formatBytes(appInfo.network_stats.bytes_recv) }}</div>
-                        </div>
+                    <div class="address-card">
+                        <div class="glass-label">LXMF Address</div>
+                        <div class="monospace-field break-all">{{ config.lxmf_address_hash }}</div>
+                        <button @click="copyValue(config.lxmf_address_hash, 'LXMF Address')" type="button" class="secondary-chip mt-3 text-xs">
+                            <MaterialDesignIcon icon-name="account-network" class="w-4 h-4"/>
+                            Copy
+                        </button>
                     </div>
-
-                    <!-- packets sent -->
-                    <div class="p-1">
-                        <div>Packets Sent</div>
-                        <div class="text-sm text-gray-700 dark:text-zinc-400">{{ formatNumber(appInfo.network_stats.packets_sent) }}</div>
+                    <div class="address-card">
+                        <div class="glass-label">Propagation Node</div>
+                        <div class="monospace-field break-all">{{ config.lxmf_local_propagation_node_address_hash || '—' }}</div>
                     </div>
-
-                    <!-- packets received -->
-                    <div class="p-1">
-                        <div>Packets Received</div>
-                        <div class="text-sm text-gray-700 dark:text-zinc-400">{{ formatNumber(appInfo.network_stats.packets_recv) }}</div>
-                    </div>
-
-                </div>
-            </div>
-
-            <!-- reticulum statistics -->
-            <div v-if="appInfo && appInfo.reticulum_stats" class="bg-white dark:bg-zinc-900 rounded shadow">
-                <div class="flex border-b border-gray-300 dark:border-zinc-700 text-gray-700 dark:text-zinc-200 p-2 font-semibold">
-                    Reticulum Statistics
-                    <span class="ml-auto text-xs text-green-600 dark:text-green-400 flex items-center">
-                        <span class="w-2 h-2 bg-green-500 rounded-full mr-1 animate-pulse"></span>
-                        Live
-                    </span>
-                </div>
-                <div class="divide-y divide-gray-200 dark:divide-zinc-800 text-gray-900 dark:text-zinc-200">
-
-                    <!-- total paths -->
-                    <div class="p-1">
-                        <div>Total Paths</div>
-                        <div class="text-sm text-gray-700 dark:text-zinc-400">{{ formatNumber(appInfo.reticulum_stats.total_paths) }}</div>
-                    </div>
-
-                    <!-- announces per second -->
-                    <div class="p-1">
-                        <div>Announces per Second</div>
-                        <div class="text-sm text-gray-700 dark:text-zinc-400">{{ formatNumber(appInfo.reticulum_stats.announces_per_second) }}</div>
-                    </div>
-
-                    <!-- announces per minute -->
-                    <div class="p-1">
-                        <div>Announces per Minute</div>
-                        <div class="text-sm text-gray-700 dark:text-zinc-400">{{ formatNumber(appInfo.reticulum_stats.announces_per_minute) }}</div>
-                    </div>
-
-                    <!-- announces per hour -->
-                    <div class="p-1">
-                        <div>Announces per Hour</div>
-                        <div class="text-sm text-gray-700 dark:text-zinc-400">{{ formatNumber(appInfo.reticulum_stats.announces_per_hour) }}</div>
-                    </div>
-
-                </div>
-            </div>
-
-            <!-- download statistics -->
-            <div v-if="appInfo && appInfo.download_stats" class="bg-white dark:bg-zinc-900 rounded shadow">
-                <div class="flex border-b border-gray-300 dark:border-zinc-700 text-gray-700 dark:text-zinc-200 p-2 font-semibold">
-                    Download Statistics
-                    <span class="ml-auto text-xs text-green-600 dark:text-green-400 flex items-center">
-                        <span class="w-2 h-2 bg-green-500 rounded-full mr-1 animate-pulse"></span>
-                        Live
-                    </span>
-                </div>
-                <div class="divide-y divide-gray-200 dark:divide-zinc-800 text-gray-900 dark:text-zinc-200">
-
-                    <!-- average download speed -->
-                    <div class="p-1">
-                        <div>Average Download Speed</div>
-                        <div class="text-sm text-gray-700 dark:text-zinc-400">
-                            <span v-if="appInfo.download_stats.avg_download_speed_bps !== null">
-                                {{ formatBytesPerSecond(appInfo.download_stats.avg_download_speed_bps) }}
-                            </span>
-                            <span v-else>No downloads yet</span>
-                        </div>
-                    </div>
-
-                </div>
-            </div>
-
-            <!-- reticulum status -->
-            <div v-if="appInfo" class="bg-white dark:bg-zinc-900 rounded shadow">
-                <div class="flex border-b border-gray-300 dark:border-zinc-700 text-gray-700 dark:text-zinc-200 p-2 font-semibold">Reticulum Status</div>
-                <div class="divide-y divide-gray-200 dark:divide-zinc-800 text-gray-900 dark:text-zinc-200">
-
-                    <!-- instance mode -->
-                    <div class="p-1">
-                        <div>Instance Mode</div>
-                        <div class="text-sm text-gray-700 dark:text-zinc-400">
-                            <span v-if="appInfo.is_connected_to_shared_instance" class="text-orange-600 dark:text-orange-400">Connected to Shared Instance</span>
-                            <span v-else class="text-green-600 dark:text-green-400">Running as Standalone Instance</span>
-                        </div>
-                    </div>
-
-                    <!-- transport mode -->
-                    <div class="p-1">
-                        <div>Transport Mode</div>
-                        <div class="text-sm text-gray-700 dark:text-zinc-400">
-                            <span v-if="appInfo.is_transport_enabled" class="text-green-600 dark:text-green-400">Transport Enabled</span>
-                            <span v-else class="text-orange-600 dark:text-orange-400">Transport Disabled</span>
-                        </div>
-                    </div>
-
-                </div>
-            </div>
-
-            <!-- my addresses -->
-            <div v-if="config" class="bg-white dark:bg-zinc-900 rounded shadow">
-                <div class="flex border-b border-gray-300 dark:border-zinc-700 text-gray-700 dark:text-zinc-200 p-2 font-semibold">My Addresses</div>
-                <div class="divide-y divide-gray-200 dark:divide-zinc-800 text-gray-900 dark:text-zinc-200">
-                    <div class="p-1">
-                        <div>Identity Hash</div>
-                        <div class="text-sm text-gray-700 dark:text-zinc-400">{{ config.identity_hash }}</div>
-                    </div>
-                    <div class="p-1">
-                        <div>LXMF Address</div>
-                        <div class="text-sm text-gray-700 dark:text-zinc-400">{{ config.lxmf_address_hash }}</div>
-                    </div>
-                    <div class="p-1">
-                        <div>LXMF Propagation Node Address</div>
-                        <div class="text-sm text-gray-700 dark:text-zinc-400">{{ config.lxmf_local_propagation_node_address_hash }}</div>
-                    </div>
-                    <div class="p-1">
-                        <div>Audio Call Address</div>
-                        <div class="text-sm text-gray-700 dark:text-zinc-400">{{ config.audio_call_address_hash }}</div>
+                    <div class="address-card">
+                        <div class="glass-label">Audio Call Address</div>
+                        <div class="monospace-field break-all">{{ config.audio_call_address_hash || '—' }}</div>
                     </div>
                 </div>
             </div>
-
+            </div>
         </div>
     </div>
 </template>
@@ -255,8 +202,13 @@
 <script>
 import Utils from "../../js/Utils";
 import ElectronUtils from "../../js/ElectronUtils";
+import MaterialDesignIcon from "../MaterialDesignIcon.vue";
+import DialogUtils from "../../js/DialogUtils";
 export default {
     name: 'AboutPage',
+    components: {
+        MaterialDesignIcon,
+    },
     data() {
         return {
             appInfo: null,
@@ -296,6 +248,20 @@ export default {
                 console.log(e);
             }
         },
+        async copyValue(value, label) {
+            if(!value){
+                return;
+            }
+            try {
+                await navigator.clipboard.writeText(value);
+                DialogUtils.toast?.(`${label} copied`) ?? DialogUtils.alert(`${label} copied to clipboard`);
+            } catch(e) {
+                DialogUtils.alert(`Failed to copy ${label}`);
+            }
+        },
+        relaunch() {
+            ElectronUtils.relaunch();
+        },
         showReticulumConfigFile() {
             const reticulumConfigPath = this.appInfo.reticulum_config_path;
             if(reticulumConfigPath){
@@ -316,6 +282,11 @@ export default {
         },
         formatBytesPerSecond: function(bytesPerSecond) {
             return Utils.formatBytesPerSecond(bytesPerSecond);
+        },
+        statusPillClass(isGood) {
+            return isGood
+                ? "inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-700 px-3 py-1 text-xs font-semibold"
+                : "inline-flex items-center gap-1 rounded-full bg-orange-100 text-orange-700 px-3 py-1 text-xs font-semibold";
         },
     },
     computed: {

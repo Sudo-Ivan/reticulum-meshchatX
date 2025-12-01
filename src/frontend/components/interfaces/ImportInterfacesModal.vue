@@ -125,9 +125,10 @@ export default {
             this.importableInterfaces = [];
             this.selectedInterfaces = [];
         },
-        dismiss() {
+        dismiss(result = false) {
             this.isShowing = false;
-            this.$emit("dismissed");
+            const imported = result === true;
+            this.$emit("dismissed", imported);
         },
         clearSelectedFile() {
             this.selectedFile = null;
@@ -221,7 +222,7 @@ export default {
                 });
 
                 // dismiss modal
-                this.dismiss();
+                this.dismiss(true);
 
                 // tell user interfaces were imported
                 DialogUtils.alert("Interfaces imported successfully. MeshChat must be restarted for these changes to take effect.");

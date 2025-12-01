@@ -1,54 +1,86 @@
 <template>
-    <div :class="{'dark': config?.theme === 'dark'}" class="h-screen w-full flex flex-col">
+    <div :class="{'dark': config?.theme === 'dark'}" class="h-screen w-full flex flex-col bg-slate-50 dark:bg-zinc-950 transition-colors">
 
-        <!-- header -->
-        <div class="flex bg-white dark:bg-zinc-950 p-2 border-gray-300 dark:border-zinc-900 border-b min-h-16">
-            <div class="flex w-full">
-                <div class="hidden sm:flex my-auto w-12 h-12 mr-2">
-                    <img class="w-12 h-12" src="/assets/images/logo-chat-bubble.png" />
-                </div>
-                <div class="my-auto">
-                    <div @click="onAppNameClick" class="font-bold cursor-pointer text-gray-900 dark:text-zinc-100">Reticulum MeshChat</div>
-                    <div class="text-sm text-gray-700 dark:text-white">
-                        Developed by
-                        <a target="_blank" href="https://liamcottle.com" class="text-blue-500 dark:text-blue-400">Liam Cottle</a>
-                    </div>
-                </div>
-                <div class="flex my-auto ml-auto mr-0 sm:mr-2 space-x-1 sm:space-x-2">
-                    <button @click="syncPropagationNode" type="button" class="rounded-full">
-                        <span class="flex text-gray-700 dark:text-white bg-gray-100 dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-600 px-2 py-1 rounded-full">
-                            <span :class="{ 'animate-spin': isSyncingPropagationNode }">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
-                                </svg>
-                            </span>
-                            <span class="hidden sm:inline-block my-auto mx-1 text-sm">Sync Messages</span>
-                        </span>
-                    </button>
-                    <button @click="composeNewMessage" type="button" class="rounded-full">
-                        <span class="flex text-gray-700 dark:text-white bg-gray-100 dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-600 px-2 py-1 rounded-full">
-                            <span>
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
-                                </svg>
-                            </span>
-                            <span class="hidden sm:inline-block my-auto mx-1 text-sm">Compose</span>
-                        </span>
-                    </button>
-                </div>
-            </div>
+        <div v-if="isPopoutMode" class="flex flex-1 h-full w-full overflow-hidden bg-slate-50/90 dark:bg-zinc-950">
+            <RouterView class="flex-1"/>
         </div>
 
-        <!-- middle -->
-        <div ref="middle" class="flex h-full w-full overflow-auto">
+        <template v-else>
 
-            <!-- sidebar -->
-            <div class="bg-white flex w-72 min-w-72 flex-col dark:bg-zinc-950">
-                <div class="flex grow flex-col overflow-y-auto border-r border-gray-200 bg-white dark:border-zinc-900 dark:bg-zinc-950">
+            <!-- header -->
+            <div class="flex bg-white/80 dark:bg-zinc-900/70 backdrop-blur border-gray-200 dark:border-zinc-800 border-b min-h-16 shadow-sm transition-colors">
+                <div class="flex w-full">
+                    <div class="hidden sm:flex my-auto w-12 h-12 mr-2 rounded-xl overflow-hidden bg-white/70 dark:bg-zinc-800/80 border border-gray-200 dark:border-zinc-700 shadow-inner">
+                        <img class="w-12 h-12 object-contain p-1.5" src="/assets/images/logo-chat-bubble.png" />
+                    </div>
+                    <div class="my-auto">
+                        <div @click="onAppNameClick" class="font-semibold cursor-pointer text-gray-900 dark:text-zinc-100 tracking-tight text-lg">Reticulum MeshChatX</div>
+                        <div class="text-sm text-gray-600 dark:text-zinc-300">
+                            Custom fork by
+                            <a target="_blank" href="https://github.com/Sudo-Ivan" class="text-blue-500 dark:text-blue-300 hover:underline">Sudo-Ivan</a>
+                        </div>
+                    </div>
+                    <div class="flex my-auto ml-auto mr-0 sm:mr-2 space-x-2">
+                        <button @click="syncPropagationNode" type="button" class="rounded-full">
+                            <span class="flex text-gray-800 dark:text-zinc-100 bg-white dark:bg-zinc-800/80 border border-gray-200 dark:border-zinc-700 hover:border-blue-400 dark:hover:border-blue-400/60 px-3 py-1.5 rounded-full shadow-sm transition">
+                                <span :class="{ 'animate-spin': isSyncingPropagationNode }">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                                    </svg>
+                                </span>
+                                <span class="hidden sm:inline-block my-auto mx-1 text-sm font-medium">Sync Messages</span>
+                            </span>
+                        </button>
+                        <button @click="composeNewMessage" type="button" class="rounded-full">
+                            <span class="flex text-white bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 hover:from-blue-500/90 hover:to-purple-500/90 px-3 py-1.5 rounded-full shadow-md transition">
+                                <span>
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
+                                    </svg>
+                                </span>
+                                <span class="hidden sm:inline-block my-auto mx-1 text-sm font-semibold">Compose</span>
+                            </span>
+                        </button>
+                    </div>
+                </div>
+            </div>
 
-                    <!-- navigation -->
-                    <div class="flex-1">
-                        <ul class="py-2 pr-2 space-y-1">
+            <!-- onboarding / guidance -->
+            <div v-if="hasGuidanceMessages" class="border-b border-amber-200/60 bg-amber-50/70 text-amber-900 dark:bg-amber-950/30 dark:border-amber-800/40 dark:text-amber-100 transition">
+                <div class="max-w-5xl mx-auto px-4 py-4 space-y-3">
+                    <div 
+                        v-for="message in guidanceMessages" 
+                        :key="message.id" 
+                        class="flex flex-col gap-2 rounded-2xl border p-4 text-sm sm:flex-row sm:items-center shadow-sm"
+                        :class="guidanceCardClass(message)"
+                    >
+                        <div class="space-y-1">
+                            <div class="font-semibold">{{ message.title }}</div>
+                            <div class="text-xs sm:text-sm text-amber-900/80 dark:text-amber-100/80">{{ message.description }}</div>
+                        </div>
+                        <div v-if="message.action_route" class="sm:ml-auto">
+                            <button 
+                                type="button"
+                                @click="navigateTo(message.action_route)"
+                                class="inline-flex items-center rounded-full bg-amber-600/90 px-3 py-1.5 text-xs font-semibold text-white shadow hover:bg-amber-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600"
+                            >
+                                {{ message.action_label || 'Open' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- middle -->
+            <div ref="middle" class="flex h-full w-full overflow-hidden bg-slate-50/80 dark:bg-zinc-950 transition-colors">
+
+                <!-- sidebar -->
+                <div class="bg-transparent flex w-72 min-w-72 flex-col">
+                    <div class="flex grow flex-col overflow-y-auto border-r border-gray-200/70 bg-white/80 dark:border-zinc-800 dark:bg-zinc-900/70 backdrop-blur">
+
+                        <!-- navigation -->
+                        <div class="flex-1">
+                            <ul class="py-3 pr-2 space-y-1">
 
                             <!-- messages -->
                             <li>
@@ -144,8 +176,8 @@
                     <div>
 
                         <!-- my identity -->
-                        <div v-if="config" class="bg-white border-t dark:border-zinc-900 dark:bg-zinc-950">
-                            <div @click="isShowingMyIdentitySection = !isShowingMyIdentitySection" class="flex text-gray-700 p-2 cursor-pointer">
+                        <div v-if="config" class="bg-white/80 border-t dark:border-zinc-800 dark:bg-zinc-900/70 backdrop-blur">
+                            <div @click="isShowingMyIdentitySection = !isShowingMyIdentitySection" class="flex text-gray-700 p-3 cursor-pointer">
                                 <div class="my-auto mr-2">
                                     <RouterLink @click.stop :to="{ name: 'profile.icon' }">
                                         <LxmfUserIcon
@@ -162,8 +194,8 @@
                                     </button>
                                 </div>
                             </div>
-                            <div v-if="isShowingMyIdentitySection" class="divide-y text-gray-900 border-t border-gray-300 dark:text-zinc-200 dark:border-zinc-900">
-                                <div class="p-1">
+                            <div v-if="isShowingMyIdentitySection" class="divide-y text-gray-900 border-t border-gray-200 dark:text-zinc-200 dark:border-zinc-800">
+                                <div class="p-2">
                                     <input 
                                         v-model="displayName" 
                                         type="text" 
@@ -172,11 +204,11 @@
                                                dark:bg-zinc-800 dark:border-zinc-600 dark:text-zinc-200 dark:focus:ring-blue-400 dark:focus:border-blue-400"
                                     >
                                 </div>
-                                <div class="p-1 dark:border-zinc-900">
+                                <div class="p-2 dark:border-zinc-900">
                                     <div>Identity Hash</div>
                                     <div class="text-sm text-gray-700 dark:text-zinc-400">{{ config.identity_hash }}</div>
                                 </div>
-                                <div class="p-1 dark:border-zinc-900">
+                                <div class="p-2 dark:border-zinc-900">
                                     <div>LXMF Address</div>
                                     <div class="text-sm text-gray-700 dark:text-zinc-400">{{ config.lxmf_address_hash }}</div>
                                 </div>
@@ -184,8 +216,8 @@
                         </div>
 
                         <!-- auto announce -->
-                        <div v-if="config" class="bg-white border-t dark:bg-zinc-950 dark:border-zinc-900">
-                            <div @click="isShowingAnnounceSection = !isShowingAnnounceSection" class="flex text-gray-700 p-2 cursor-pointer dark:text-white">
+                        <div v-if="config" class="bg-white/80 border-t dark:bg-zinc-900/70 dark:border-zinc-800">
+                            <div @click="isShowingAnnounceSection = !isShowingAnnounceSection" class="flex text-gray-700 p-3 cursor-pointer dark:text-white">
                                 <div class="my-auto mr-2">
                                     <svg 
                                         xmlns="http://www.w3.org/2000/svg" 
@@ -214,8 +246,8 @@
                                     </button>
                                 </div>
                             </div>
-                            <div v-if="isShowingAnnounceSection" class="divide-y text-gray-900 border-t border-gray-300 dark:text-zinc-200 dark:border-zinc-900">
-                                <div class="p-1 dark:border-zinc-900">
+                            <div v-if="isShowingAnnounceSection" class="divide-y text-gray-900 border-t border-gray-200 dark:text-zinc-200 dark:border-zinc-900">
+                                <div class="p-2 dark:border-zinc-900">
                                     <select 
                                         v-model="config.auto_announce_interval_seconds" 
                                         @change="onAnnounceIntervalSecondsChange" 
@@ -240,8 +272,8 @@
                         </div>
 
                         <!-- audio calls -->
-                        <div v-if="config" class="bg-white border-t dark:bg-zinc-950 dark:border-zinc-900">
-                            <div @click="isShowingCallsSection = !isShowingCallsSection" class="flex text-gray-700 p-2 cursor-pointer">
+                        <div v-if="config" class="bg-white/80 border-t dark:bg-zinc-900/70 dark:border-zinc-900">
+                            <div @click="isShowingCallsSection = !isShowingCallsSection" class="flex text-gray-700 p-3 cursor-pointer">
                                 <div class="my-auto mr-2">
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="dark:text-white w-6 h-6">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 0 0 2.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 0 1-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 0 0-1.091-.852H4.5A2.25 2.25 0 0 0 2.25 4.5v2.25Z" />
@@ -260,8 +292,8 @@ dark:bg-zinc-800 dark:text-white dark:hover:bg-zinc-700 dark:focus-visible:outli
                                     </a>
                                 </div>
                             </div>
-                            <div v-if="isShowingCallsSection" class="divide-y text-gray-900 border-t border-gray-300 dark:border-zinc-900">
-                                <div class="p-1 flex dark:border-zinc-900 dark:text-white">
+                            <div v-if="isShowingCallsSection" class="divide-y text-gray-900 border-t border-gray-200 dark:border-zinc-900">
+                                <div class="p-2 flex dark:border-zinc-900 dark:text-white">
                                     <div>
                                         <div>Status</div>
                                         <div class="text-sm text-gray-700 dark:text-white">
@@ -299,9 +331,10 @@ dark:bg-zinc-800 dark:text-white dark:hover:bg-zinc-700 dark:focus-visible:outli
                 </div>
             </div>
 
-            <RouterView/>
+                <RouterView v-if="!isPopoutMode"/>
 
-        </div>
+            </div>
+        </template>
     </div>
 </template>
 
@@ -326,6 +359,7 @@ export default {
         return {
 
             reloadInterval: null,
+            appInfoInterval: null,
 
             isShowingMyIdentitySection: true,
             isShowingAnnounceSection: true,
@@ -343,6 +377,7 @@ export default {
     beforeUnmount() {
 
         clearInterval(this.reloadInterval);
+        clearInterval(this.appInfoInterval);
 
         // stop listening for websocket messages
         WebSocketConnection.off("message", this.onWebsocketMessage);
@@ -354,6 +389,7 @@ export default {
         WebSocketConnection.on("message", this.onWebsocketMessage);
 
         this.getAppInfo();
+        this.getConfig();
         this.updateCallsList();
         this.updatePropagationNodeStatus();
 
@@ -362,9 +398,52 @@ export default {
             this.updateCallsList();
             this.updatePropagationNodeStatus();
         }, 3000);
+        this.appInfoInterval = setInterval(() => {
+            this.getAppInfo();
+        }, 15000);
 
     },
+    computed: {
+        currentPopoutType() {
+            if(this.$route?.meta?.popoutType){
+                return this.$route.meta.popoutType;
+            }
+            return this.$route?.query?.popout ?? this.getHashPopoutValue();
+        },
+        isPopoutMode() {
+            return this.currentPopoutType != null;
+        },
+        hasGuidanceMessages() {
+            return this.guidanceMessages.length > 0;
+        },
+        guidanceMessages() {
+            if (!this.appInfo || !Array.isArray(this.appInfo.user_guidance)) {
+                return [];
+            }
+            return this.appInfo.user_guidance;
+        },
+    },
     methods: {
+        guidanceCardClass(message) {
+            switch(message.severity){
+                case 'warning':
+                    return 'border-amber-200 bg-white text-amber-900 dark:bg-transparent dark:border-amber-300/40';
+                case 'info':
+                default:
+                    return 'border-amber-100 bg-white text-amber-900 dark:bg-transparent dark:border-amber-200/30';
+            }
+        },
+        navigateTo(routePath) {
+            if (!routePath) {
+                return;
+            }
+            this.$router.push(routePath);
+        },
+        getHashPopoutValue() {
+            const hash = window.location.hash || "";
+            const match = hash.match(/popout=([^&]+)/);
+            return match ? decodeURIComponent(match[1]) : null;
+        },
         async onWebsocketMessage(message) {
             const json = JSON.parse(message.data);
             switch(json.type){

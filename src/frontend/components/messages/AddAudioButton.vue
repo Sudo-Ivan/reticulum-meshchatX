@@ -1,22 +1,16 @@
 <template>
-    <div class="inline-flex rounded-md shadow-sm">
+    <div class="inline-flex">
 
-        <button v-if="isRecordingAudioAttachment" @click="stopRecordingAudioAttachment" type="button" class="my-auto mr-1 inline-flex items-center gap-x-1 rounded-md bg-red-500 px-2.5 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500 dark:bg-zinc-800 dark:text-white dark:hover:bg-zinc-700 dark:focus-visible:outline-zinc-500">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="size-5">
-                <path d="M7 4a3 3 0 0 1 6 0v6a3 3 0 1 1-6 0V4Z" />
-                <path d="M5.5 9.643a.75.75 0 0 0-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 0 0 0 1.5h4.5a.75.75 0 0 0 0-1.5h-1.5v-1.546A6.001 6.001 0 0 0 16 10v-.357a.75.75 0 0 0-1.5 0V10a4.5 4.5 0 0 1-9 0v-.357Z" />
-            </svg>
+        <button v-if="isRecordingAudioAttachment" @click="stopRecordingAudioAttachment" type="button" class="my-auto inline-flex items-center gap-x-1 rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 shadow-sm hover:border-red-400 transition dark:border-red-500/40 dark:bg-red-900/30 dark:text-red-100">
+            <MaterialDesignIcon icon-name="microphone" class="w-4 h-4"/>
             <span class="ml-1">
                 <slot/>
             </span>
         </button>
 
-        <button v-else @click="showMenu" type="button" class="my-auto mr-1 inline-flex items-center gap-x-1 rounded-md bg-gray-500 px-2.5 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-gray-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 dark:bg-zinc-800 dark:text-white dark:hover:bg-zinc-700 dark:focus-visible:outline-zinc-500">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="size-5">
-                <path d="M7 4a3 3 0 0 1 6 0v6a3 3 0 1 1-6 0V4Z" />
-                <path d="M5.5 9.643a.75.75 0 0 0-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 0 0 0 1.5h4.5a.75.75 0 0 0 0-1.5h-1.5v-1.546A6.001 6.001 0 0 0 16 10v-.357a.75.75 0 0 0-1.5 0V10a4.5 4.5 0 0 1-9 0v-.357Z" />
-            </svg>
-            <span class="ml-1 hidden xl:inline-block whitespace-nowrap">Add Voice</span>
+        <button v-else @click="showMenu" type="button" class="my-auto inline-flex items-center gap-x-1 rounded-full border border-gray-200 dark:border-zinc-700 bg-white/90 dark:bg-zinc-900/80 px-3 py-1.5 text-xs font-semibold text-gray-800 dark:text-gray-100 shadow-sm hover:border-blue-400 dark:hover:border-blue-500 transition">
+            <MaterialDesignIcon icon-name="microphone-plus" class="w-4 h-4"/>
+            <span class="hidden xl:inline-block whitespace-nowrap">Add Voice</span>
         </button>
 
         <div class="relative block">
@@ -41,8 +35,12 @@
 </template>
 
 <script>
+import MaterialDesignIcon from "../MaterialDesignIcon.vue";
 export default {
     name: 'AddAudioButton',
+    components: {
+        MaterialDesignIcon,
+    },
     props: {
         isRecordingAudioAttachment: Boolean,
     },

@@ -1,16 +1,17 @@
 <template>
-    <div class="flex flex-col flex-1 overflow-hidden min-w-full sm:min-w-[500px] dark:bg-zinc-950">
-        <div class="overflow-y-auto p-2 space-y-2">
+    <div class="flex flex-col flex-1 overflow-hidden min-w-full sm:min-w-[500px] bg-gradient-to-br from-slate-50 via-slate-100 to-white dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-900">
+        <div class="overflow-y-auto p-3 md:p-6 space-y-4 max-w-5xl mx-auto w-full">
 
             <!-- community interfaces -->
-            <div v-if="!isEditingInterface && config != null && config.show_suggested_community_interfaces" class="bg-white rounded shadow divide-y divide-gray-200 dark:bg-zinc-900">
-                <div class="flex p-2">
+            <div v-if="!isEditingInterface && config != null && config.show_suggested_community_interfaces" class="bg-white/95 dark:bg-zinc-900/80 backdrop-blur border border-gray-200 dark:border-zinc-800 rounded-3xl shadow-lg divide-y divide-gray-200 dark:divide-zinc-800">
+                <div class="flex p-3">
                     <div class="my-auto mr-auto">
-                        <div class="font-bold dark:text-white">Community Interfaces</div>
-                        <div class="text-sm dark:text-gray-100">These TCP interfaces serve as a quick way to test Reticulum. We suggest running your own as these may not always be available.</div>
+                        <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Quick start</div>
+                        <div class="font-semibold text-lg text-gray-900 dark:text-white">Community Interfaces</div>
+                        <div class="text-sm text-gray-600 dark:text-gray-200">One-click helpers for public TCP relays. Spin up your own when possible to ensure availability.</div>
                     </div>
                     <div class="my-auto ml-2">
-                        <button @click="updateConfig({'show_suggested_community_interfaces': false})" type="button" class="text-gray-700 bg-gray-100 hover:bg-gray-200 p-2 rounded-full dark:bg-zinc-600 dark:text-white dark:hover:bg-zinc-700 dark:focus-visible:outline-zinc-500">
+                        <button @click="updateConfig({'show_suggested_community_interfaces': false})" type="button" class="text-gray-700 bg-white border border-gray-200 hover:border-red-300 p-2 rounded-full shadow-sm dark:bg-zinc-800 dark:text-white dark:border-zinc-700 dark:hover:border-red-400">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5">
                                 <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z"/>
                             </svg>
@@ -19,31 +20,31 @@
                 </div>
                 <div class="divide-y divide-gray-200 dark:text-white">
 
-                    <div class="flex px-2 py-1">
+                    <div class="flex px-3 py-2 items-center">
                         <div class="my-auto mr-auto">
-                            <div>RNS Testnet Amsterdam</div>
-                            <div class="text-xs">amsterdam.connect.reticulum.network:4965</div>
+                            <div class="font-semibold text-gray-900 dark:text-gray-100">RNS Testnet Amsterdam</div>
+                            <div class="text-xs text-gray-600 dark:text-gray-300">amsterdam.connect.reticulum.network:4965</div>
                         </div>
                         <div class="ml-2 my-auto">
                             <button
                                 @click="newInterfaceName='RNS Testnet Amsterdam';newInterfaceType='TCPClientInterface';newInterfaceTargetHost='amsterdam.connect.reticulum.network';newInterfaceTargetPort='4965'"
                                 type="button"
-                                class="inline-flex items-center gap-x-1 rounded-md bg-gray-500 px-2 py-1 text-sm font-semibold text-white shadow-sm hover:bg-gray-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500">
+                                class="inline-flex items-center gap-x-2 rounded-full bg-blue-600/90 px-3 py-1.5 text-xs font-semibold text-white shadow hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500">
                                 <span>Use Interface</span>
                             </button>
                         </div>
                     </div>
 
-                    <div class="flex px-2 py-1">
+                    <div class="flex px-3 py-2 items-center">
                         <div class="my-auto mr-auto">
-                            <div>RNS Testnet BetweenTheBorders</div>
-                            <div class="text-xs">reticulum.betweentheborders.com:4242</div>
+                            <div class="font-semibold text-gray-900 dark:text-gray-100">RNS Testnet BetweenTheBorders</div>
+                            <div class="text-xs text-gray-600 dark:text-gray-300">reticulum.betweentheborders.com:4242</div>
                         </div>
                         <div class="ml-2 my-auto">
                             <button
                                 @click="newInterfaceName='RNS Testnet BetweenTheBorders';newInterfaceType='TCPClientInterface';newInterfaceTargetHost='reticulum.betweentheborders.com';newInterfaceTargetPort='4242'"
                                 type="button"
-                                class="inline-flex items-center gap-x-1 rounded-md bg-gray-500 px-2 py-1 text-sm font-semibold text-white shadow-sm hover:bg-gray-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500">
+                                class="inline-flex items-center gap-x-2 rounded-full bg-blue-600/90 px-3 py-1.5 text-xs font-semibold text-white shadow hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500">
                                 <span>Use Interface</span>
                             </button>
                         </div>
@@ -53,44 +54,64 @@
             </div>
 
             <!-- add interface form -->
-            <div class="bg-white rounded shadow divide-y divide-gray-300 dark:divide-zinc-700 dark:bg-zinc-900">
-                <div class="p-2 font-bold dark:text-white">
-                    <span v-if="isEditingInterface">Edit Interface</span>
-                    <span v-else>Add Interface</span>
+            <div class="bg-white/95 dark:bg-zinc-900/85 backdrop-blur border border-gray-200 dark:border-zinc-800 rounded-3xl shadow-xl">
+                <div class="flex flex-wrap gap-3 items-center p-3 border-b border-gray-200 dark:border-zinc-800">
+                    <div>
+                        <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">{{ isEditingInterface ? 'Update' : 'Create' }}</div>
+                        <div class="text-xl font-semibold text-gray-900 dark:text-white">
+                            {{ isEditingInterface ? 'Edit Interface' : 'Add Interface' }}
+                        </div>
+                        <div class="text-sm text-gray-600 dark:text-gray-300">Name your connection and select its transport type.</div>
+                    </div>
+                    <div class="flex-1"></div>
+                    <div class="flex gap-2">
+                        <button @click="loadComports" type="button" class="secondary-chip text-xs">
+                            Reload Ports
+                        </button>
+                        <RouterLink :to="{ name: 'interfaces' }" class="secondary-chip text-xs">
+                            View All
+                        </RouterLink>
+                    </div>
                 </div>
-                <div class="p-2 space-y-3">
+                <div class="p-3 md:p-5 space-y-4">
 
                     <!-- iGeneric interface settings -->
                     <!-- interface name -->
                     <div>
-                        <FormLabel class="mb-1">Name</FormLabel>
+                        <FormLabel class="glass-label">Name</FormLabel>
                         <input type="text" :disabled="isEditingInterface" placeholder="New Interface Name"
                                v-model="newInterfaceName"
-                               class="border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-zinc-900 dark:border-zinc-600 dark:text-white"
-                               :class="[ isEditingInterface ? 'cursor-not-allowed bg-gray-200' : 'bg-gray-50' ]">
-                        <FormSubLabel>Interface names must be unique.</FormSubLabel>
+                               class="input-field"
+                               :class="[ isEditingInterface ? 'cursor-not-allowed bg-gray-200 dark:bg-zinc-800' : '' ]">
+                        <FormSubLabel class="text-xs">Interface names must be unique.</FormSubLabel>
                     </div>
 
                     <!-- interface type -->
-                    <div class="mb-2">
-                        <FormLabel class="mb-1">Type</FormLabel>
-                        <select v-model="newInterfaceType" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-zinc-900 dark:border-zinc-600 dark:text-white">
-                            <option disabled selected>--</option>
-                            <option value="AutoInterface">Auto Interface</option>
-                            <option disabled selected>RNodes</option>
-                            <option value="RNodeInterface">RNode Interface</option>
-                            <option value="RNodeMultiInterface">RNode Multi Interface</option>
-                            <option disabled selected>IP Networks</option>
-                            <option value="TCPClientInterface">TCP Client Interface</option>
-                            <option value="TCPServerInterface">TCP Server Interface</option>
-                            <option value="UDPInterface">UDP Interface</option>
-                            <option value="I2PInterface">I2P Interface</option>
-                            <option disabled selected>Hardware</option>
-                            <option value="SerialInterface">Serial Interface</option>
-                            <option value="KISSInterface">KISS Interface</option>
-                            <option hidden value="AX25KISSInterface">AX.25 KISS Interface</option>
-                            <option disabled selected>Other</option>
-                            <option value="PipeInterface">Pipe Interface</option>
+                    <div>
+                        <FormLabel class="glass-label">Type</FormLabel>
+                        <select v-model="newInterfaceType" class="input-field">
+                            <option disabled selected>Pick a category…</option>
+                            <optgroup label="Automatic">
+                                <option value="AutoInterface">Auto Interface</option>
+                            </optgroup>
+                            <optgroup label="RNodes">
+                                <option value="RNodeInterface">RNode Interface</option>
+                                <option value="RNodeMultiInterface">RNode Multi Interface</option>
+                            </optgroup>
+                            <optgroup label="IP Networks">
+                                <option value="TCPClientInterface">TCP Client Interface</option>
+                                <option value="TCPServerInterface">TCP Server Interface</option>
+                                <option value="UDPInterface">UDP Interface</option>
+                                <option value="I2PInterface">I2P Interface</option>
+                            </optgroup>
+                            <optgroup label="Hardware">
+                                <option value="SerialInterface">Serial Interface</option>
+                                <option value="KISSInterface">KISS Interface</option>
+                                <option value="AX25KISSInterface">AX.25 KISS Interface</option>
+                            </optgroup>
+                            <optgroup label="Pipelines">
+                                <option value="PipeInterface">Pipe Interface</option>
+                            </optgroup>
                         </select>
                         <FormSubLabel>
                             Need help? <a class="text-blue-500 underline" href="https://reticulum.network/manual/interfaces.html" target="_blank">Reticulum Docs: Configuring Interfaces</a>
@@ -101,13 +122,13 @@
                     <!-- interface target host -->
                     <div v-if="newInterfaceType === 'TCPClientInterface'" class="mb-2">
                         <FormLabel class="mb-1">Target Host</FormLabel>
-                        <input type="text" placeholder="e.g: example.com" v-model="newInterfaceTargetHost" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-zinc-900 dark:border-zinc-600 dark:text-white dark:focus:ring-blue-600 dark:focus:border-blue-600">
+                        <input type="text" placeholder="e.g: example.com" v-model="newInterfaceTargetHost" class="input-field">
                     </div>
 
                     <!-- interface target port -->
                     <div v-if="newInterfaceType === 'TCPClientInterface'" class="mb-2">
                         <FormLabel class="mb-1">Target Port</FormLabel>
-                        <input type="text" placeholder="e.g: 1234" v-model="newInterfaceTargetPort" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-zinc-900 dark:border-zinc-600 dark:text-white dark:focus:ring-blue-600 dark:focus:border-blue-600">
+                        <input type="text" placeholder="e.g: 1234" v-model="newInterfaceTargetPort" class="input-field">
                     </div>
 
                     <!-- TCPServerInterface -->
@@ -1317,3 +1338,24 @@ export default {
     },
 }
 </script>
+
+<style scoped>
+.glass-card {
+    @apply bg-white/95 dark:bg-zinc-900/85 backdrop-blur border border-gray-200 dark:border-zinc-800 rounded-3xl shadow-xl;
+}
+.input-field {
+    @apply bg-gray-50/90 dark:bg-zinc-900/80 border border-gray-200 dark:border-zinc-700 text-sm rounded-2xl focus:ring-2 focus:ring-blue-400 focus:border-blue-400 dark:focus:ring-blue-500 dark:focus:border-blue-500 block w-full p-2.5 text-gray-900 dark:text-gray-100 transition;
+}
+.glass-label {
+    @apply mb-1 text-sm font-semibold text-gray-800 dark:text-gray-200;
+}
+.primary-chip {
+    @apply inline-flex items-center gap-x-2 rounded-full bg-blue-600/90 px-3 py-1.5 text-xs font-semibold text-white shadow hover:bg-blue-500 transition;
+}
+.secondary-chip {
+    @apply inline-flex items-center gap-x-2 rounded-full border border-gray-300 dark:border-zinc-700 px-3 py-1.5 text-xs font-semibold text-gray-700 dark:text-gray-100 bg-white/80 dark:bg-zinc-900/70 hover:border-blue-400;
+}
+.glass-field {
+    @apply space-y-1;
+}
+</style>

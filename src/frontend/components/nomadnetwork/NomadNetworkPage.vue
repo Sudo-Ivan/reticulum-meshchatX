@@ -2,6 +2,7 @@
 
     <!-- nomadnetwork sidebar -->
     <NomadNetworkSidebar
+        v-if="!isPopoutMode"
         :nodes="nodes"
         :favourites="favourites"
         :selected-destination-hash="selectedNode?.destination_hash"
@@ -11,7 +12,7 @@
 
    <div class="flex flex-col flex-1 overflow-hidden min-w-full sm:min-w-[500px] dark:bg-zinc-950">
     <!-- node -->
-    <div v-if="selectedNode" class="flex flex-col h-full bg-white dark:bg-zinc-950 overflow-hidden sm:m-2 sm:border dark:border-zinc-800 sm:rounded-xl sm:shadow dark:shadow-zinc-900">
+    <div v-if="selectedNode" class="flex flex-col h-full min-h-0 bg-white dark:bg-zinc-950 overflow-hidden sm:m-2 sm:border dark:border-zinc-800 sm:rounded-xl sm:shadow dark:shadow-zinc-900">
         <!-- header -->
         <div class="flex p-2 border-b border-gray-300 dark:border-zinc-800">
 
@@ -38,8 +39,8 @@
             </div>
 
             <!-- node info -->
-            <div class="my-auto dark:text-gray-100">
-                <span class="font-semibold">{{ selectedNode.display_name }}</span>
+            <div class="my-auto dark:text-gray-100 flex-1 min-w-0">
+                <span class="font-semibold truncate inline-block max-w-xs sm:max-w-sm" :title="selectedNode.display_name">{{ selectedNode.display_name }}</span>
                 <span v-if="selectedNodePath" @click="onDestinationPathClick(selectedNodePath)" class="text-sm cursor-pointer"> - {{ selectedNodePath.hops }} {{ selectedNodePath.hops === 1 ? 'hop' : 'hops' }} away</span>
             </div>
 
@@ -50,6 +51,20 @@
                         <div>
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M7.864 4.243A7.5 7.5 0 0 1 19.5 10.5c0 2.92-.556 5.709-1.568 8.268M5.742 6.364A7.465 7.465 0 0 0 4.5 10.5a7.464 7.464 0 0 1-1.15 3.993m1.989 3.559A11.209 11.209 0 0 0 8.25 10.5a3.75 3.75 0 1 1 7.5 0c0 .527-.021 1.049-.064 1.565M12 10.5a14.94 14.94 0 0 1-3.6 9.75m6.633-4.596a18.666 18.666 0 0 1-2.485 5.33" />
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- popout button -->
+            <div class="my-auto mr-2">
+                <div @click="openNomadnetPopout" class="cursor-pointer">
+                    <div class="flex text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-700 p-1 rounded-full">
+                        <div>
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-5">
+                                <path d="M17 3.75h3.25A.75.75 0 0 1 21 4.5v3.25a.75.75 0 0 1-1.5 0V6.31l-4.97 4.97a.75.75 0 1 1-1.06-1.06l4.97-4.97H17a.75.75 0 0 1 0-1.5Z"/>
+                                <path d="M5.25 6A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75v-6a.75.75 0 0 0-1.5 0v6c0 .414-.336.75-.75.75H5.25a.75.75 0 0 1-.75-.75V8.25c0-.414.336-.75.75-.75h6a.75.75 0 0 0 0-1.5h-6Z"/>
                             </svg>
                         </div>
                     </div>
@@ -103,7 +118,7 @@
         </div>
 
         <!-- page content -->
-        <div class="h-full overflow-y-scroll p-3 bg-black text-white nodeContainer">
+        <div class="flex-1 overflow-y-auto p-3 bg-black text-white nodeContainer">
             <div class="flex" v-if="isLoadingNodePage">
                 <div class="my-auto">
                     <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -274,7 +289,27 @@ export default {
         }, 5000);
 
     },
+    computed: {
+        popoutRouteType() {
+            if(this.$route?.meta?.popoutType){
+                return this.$route.meta.popoutType;
+            }
+            return this.$route?.query?.popout ?? this.getHashPopoutValue();
+        },
+        isPopoutMode() {
+            return this.popoutRouteType === "nomad";
+        },
+    },
     methods: {
+        openNomadnetPopout() {
+            if (!this.selectedNode) {
+                return;
+            }
+            const destinationHash = this.selectedNode.destination_hash || "";
+            const encodedHash = encodeURIComponent(destinationHash);
+            const url = `${window.location.origin}${window.location.pathname}#/popout/nomadnetwork/${encodedHash}`;
+            window.open(url, "_blank", "width=1100,height=800,noopener");
+        },
         onElementClick(event) {
 
             // find the closest ancestor (or the clicked element itself) with data-action="openNode"
@@ -526,12 +561,17 @@ export default {
         async loadNodePage(destinationHash, pagePath, fieldData = null, addToHistory = true, loadFromCache = true) {
 
             // update current route
-            this.$router.replace({
-                name: "nomadnetwork",
+            const routeName = this.isPopoutMode ? "nomadnetwork-popout" : "nomadnetwork";
+            const routeOptions = {
+                name: routeName,
                 params: {
                     destinationHash: destinationHash,
                 },
-            });
+            };
+            if(!this.isPopoutMode && this.$route?.query){
+                routeOptions.query = { ...this.$route.query };
+            }
+            this.$router.replace(routeOptions);
 
             // get new sequence for this page load
             const seq = ++this.nodePageRequestSequence;
@@ -782,8 +822,9 @@ export default {
             if(url.startsWith("lxmf@")){
                 const destinationHash = url.replace("lxmf@", "");
                 if(destinationHash.length === 32){
+                    const routeName = this.isPopoutMode ? "messages-popout" : "messages";
                     await this.$router.push({
-                        name: "messages",
+                        name: routeName,
                         params: {
                             destinationHash: destinationHash,
                         },
@@ -982,10 +1023,18 @@ export default {
             // clear selected node
             this.selectedNode = null;
 
+            if(this.isPopoutMode){
+                window.close();
+                return;
+            }
+
             // update current route
-            this.$router.replace({
-                name: "nomadnetwork",
-            });
+            const routeName = this.isPopoutMode ? "nomadnetwork-popout" : "nomadnetwork";
+            const routeOptions = { name: routeName };
+            if(!this.isPopoutMode && this.$route?.query){
+                routeOptions.query = { ...this.$route.query };
+            }
+            this.$router.replace(routeOptions);
 
         },
         getNomadnetPageDownloadCallbackKey: function(destinationHash, pagePath) {
@@ -1029,6 +1078,11 @@ export default {
             } catch(e) {
                 DialogUtils.alert(e.response?.data?.message ?? "Failed to identify!");
             }
+        },
+        getHashPopoutValue() {
+            const hash = window.location.hash || "";
+            const match = hash.match(/popout=([^&]+)/);
+            return match ? decodeURIComponent(match[1]) : null;
         },
         downloadNomadNetFile(destinationHash, filePath, onSuccessCallback, onFailureCallback, onProgressCallback) {
             try {

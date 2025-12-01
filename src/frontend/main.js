@@ -4,6 +4,7 @@ import { createRouter, createWebHashHistory } from 'vue-router';
 import vClickOutside from "click-outside-vue3";
 import "./style.css";
 import "./fonts/RobotoMonoNerdFont/font.css";
+import { ensureCodec2ScriptsLoaded } from "./js/Codec2Loader";
 
 import App from './components/App.vue';
 
@@ -51,6 +52,13 @@ const router = createRouter({
             component: defineAsyncComponent(() => import("./components/messages/MessagesPage.vue")),
         },
         {
+            name: "messages-popout",
+            path: '/popout/messages/:destinationHash?',
+            props: true,
+            meta: { popoutType: "conversation", isPopout: true },
+            component: defineAsyncComponent(() => import("./components/messages/MessagesPage.vue")),
+        },
+        {
             name: "network-visualiser",
             path: '/network-visualiser',
             component: defineAsyncComponent(() => import("./components/network-visualiser/NetworkVisualiserPage.vue")),
@@ -59,6 +67,13 @@ const router = createRouter({
             name: "nomadnetwork",
             path: '/nomadnetwork/:destinationHash?',
             props: true,
+            component: defineAsyncComponent(() => import("./components/nomadnetwork/NomadNetworkPage.vue")),
+        },
+        {
+            name: "nomadnetwork-popout",
+            path: '/popout/nomadnetwork/:destinationHash?',
+            props: true,
+            meta: { popoutType: "nomad", isPopout: true },
             component: defineAsyncComponent(() => import("./components/nomadnetwork/NomadNetworkPage.vue")),
         },
         {
@@ -89,8 +104,13 @@ const router = createRouter({
     ],
 })
 
-createApp(App)
-    .use(router)
-    .use(vuetify)
-    .use(vClickOutside)
-    .mount('#app');
+async function bootstrap() {
+    await ensureCodec2ScriptsLoaded();
+    createApp(App)
+        .use(router)
+        .use(vuetify)
+        .use(vClickOutside)
+        .mount('#app');
+}
+
+bootstrap();

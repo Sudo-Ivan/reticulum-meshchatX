@@ -1,7 +1,7 @@
 <template>
 
     <!-- peer selected -->
-    <div v-if="selectedPeer" class="flex flex-col h-full bg-white overflow-hidden sm:m-2 sm:border sm:rounded-xl sm:shadow dark:bg-zinc-950 dark:border-zinc-800">
+    <div v-if="selectedPeer" class="flex flex-col h-full bg-white/90 dark:bg-zinc-950/80 backdrop-blur overflow-hidden sm:m-3 sm:border sm:rounded-2xl sm:shadow-xl border-gray-200 dark:border-zinc-800 transition-colors">
 
         <!-- header -->
         <div class="flex p-2 border-b border-gray-300 dark:border-zinc-800">
@@ -17,15 +17,17 @@
             </div>
 
             <!-- peer info -->
-            <div>
-                <div @click="updateCustomDisplayName" class="flex cursor-pointer">
+            <div class="min-w-0 flex-1">
+                <div @click="updateCustomDisplayName" class="flex cursor-pointer min-w-0">
                     <div v-if="selectedPeer.custom_display_name != null" class="my-auto mr-1 dark:text-white" title="Custom Display Name">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z" />
                             <path stroke-linecap="round" stroke-linejoin="round" d="M6 6h.008v.008H6V6Z" />
                         </svg>
                     </div>
-                    <div class="my-auto font-semibold dark:text-white" :title="selectedPeer.display_name">{{ selectedPeer.custom_display_name ?? selectedPeer.display_name }}</div>
+                    <div class="my-auto font-semibold dark:text-white truncate max-w-xs sm:max-w-sm" :title="selectedPeer.custom_display_name ?? selectedPeer.display_name">
+                        {{ selectedPeer.custom_display_name ?? selectedPeer.display_name }}
+                    </div>
                 </div>
                 <div class="text-sm dark:text-zinc-300">
 
@@ -70,6 +72,13 @@
                     @set-custom-display-name="updateCustomDisplayName"/>
             </div>
 
+            <!-- popout button -->
+            <div class="my-auto mr-2">
+                <IconButton @click="openConversationPopout" title="Pop out chat">
+                    <MaterialDesignIcon icon-name="open-in-new" class="w-5 h-5"/>
+                </IconButton>
+            </div>
+
             <!-- close button -->
             <div class="my-auto mr-2">
                 <IconButton @click="close">
@@ -97,8 +106,16 @@
                             <div v-if="chatItem.lxmf_message.content" style="white-space:pre-wrap;word-break:break-word;font-family:inherit;">{{ chatItem.lxmf_message.content }}</div>
 
                             <!-- image field -->
-                            <div v-if="chatItem.lxmf_message.fields?.image">
-                                <img @click.stop="openImage(`data:image/${chatItem.lxmf_message.fields.image.image_type};base64,${chatItem.lxmf_message.fields.image.image_bytes}`)" :src="`data:image/${chatItem.lxmf_message.fields.image.image_type};base64,${chatItem.lxmf_message.fields.image.image_bytes}`" class="w-full rounded-md cursor-pointer"/>
+                            <div v-if="chatItem.lxmf_message.fields?.image" class="relative group">
+                                <img
+                                    @click.stop="openImage(`data:image/${chatItem.lxmf_message.fields.image.image_type};base64,${chatItem.lxmf_message.fields.image.image_bytes}`)"
+                                    :src="`data:image/${chatItem.lxmf_message.fields.image.image_type};base64,${chatItem.lxmf_message.fields.image.image_bytes}`"
+                                    class="w-full rounded-md cursor-pointer"/>
+                                <div class="absolute bottom-1 left-1 bg-black/70 text-white text-xs px-2 py-0.5 rounded-full flex space-x-1">
+                                    <span>{{ (chatItem.lxmf_message.fields.image.image_type ?? 'image').toUpperCase() }}</span>
+                                    <span>•</span>
+                                    <span>{{ formatBase64Bytes(chatItem.lxmf_message.fields.image.image_bytes) }}</span>
+                                </div>
                             </div>
 
                             <!-- audio field -->
@@ -129,17 +146,30 @@
                                     </button>
                                 </div>
 
+                                <div class="text-xs mt-1" :class="chatItem.is_outbound ? 'text-white/80' : 'text-gray-600'">
+                                    Audio • {{ formatBase64Bytes(chatItem.lxmf_message.fields.audio.audio_bytes) }}
+                                </div>
                             </div>
 
                             <!-- file attachment fields -->
                             <div v-if="chatItem.lxmf_message.fields?.file_attachments" class="space-y-1">
-                                <a @click.stop target="_blank" :download="file_attachment.file_name" :href="`data:application/octet-stream;base64,${file_attachment.file_bytes}`" v-for="file_attachment of chatItem.lxmf_message.fields?.file_attachments ?? []" class="flex border border-gray-300 dark:border-zinc-800 hover:bg-gray-100 rounded px-2 py-1 text-sm text-gray-700 font-semibold cursor-pointer space-x-2 bg-[#efefef]">
+                                <a
+                                    v-for="file_attachment of chatItem.lxmf_message.fields?.file_attachments ?? []"
+                                    :key="file_attachment.file_name"
+                                    @click.stop
+                                    target="_blank"
+                                    :download="file_attachment.file_name"
+                                    :href="`data:application/octet-stream;base64,${file_attachment.file_bytes}`"
+                                    class="flex border border-gray-300 dark:border-zinc-800 hover:bg-gray-100 rounded px-2 py-1 text-sm text-gray-700 font-semibold cursor-pointer space-x-2 bg-[#efefef]">
                                     <div class="my-auto">
                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
                                             <path stroke-linecap="round" stroke-linejoin="round" d="m18.375 12.739-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13"></path>
                                         </svg>
                                     </div>
-                                    <div class="my-auto w-full">{{ file_attachment.file_name }}</div>
+                                    <div class="my-auto w-full">
+                                        <div>{{ file_attachment.file_name }}</div>
+                                        <div class="text-xs font-normal text-gray-500">{{ formatBase64Bytes(file_attachment.file_bytes) }}</div>
+                                    </div>
                                     <div class="my-auto">
                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
                                             <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
@@ -239,77 +269,46 @@
                 <!-- message composer -->
                 <div>
 
-                    <!-- image attachment -->
-                    <div v-if="newMessageImage" class="mb-2">
-                        <div @click.stop="openImage(newMessageImageUrl)" class="cursor-pointer w-32 h-32 rounded shadow border relative overflow-hidden">
-
-                            <!-- image preview -->
-                            <img v-if="newMessageImageUrl" :src="newMessageImageUrl" class="w-full h-full object-cover"/>
-
-                            <!-- remove button (top right) -->
-                            <div class="absolute top-0 right-0 p-1">
-                                <div @click.stop="removeImageAttachment" class="cursor-pointer">
-                                    <div class="flex text-gray-700 bg-gray-100 hover:bg-gray-200 p-1 rounded-full">
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4">
-                                            <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
-                                        </svg>
-                                    </div>
-                                </div>
+                    <div class="space-y-2">
+                        <!-- image attachment -->
+                        <div v-if="newMessageImage" class="attachment-card">
+                            <div class="attachment-card__preview" @click.stop="openImage(newMessageImageUrl)">
+                                <img v-if="newMessageImageUrl" :src="newMessageImageUrl" class="w-full h-full object-cover rounded-lg"/>
                             </div>
-
-                            <!-- image size (bottom left) -->
-                            <div class="absolute bottom-0 left-0 p-1">
-                                <div class="bg-gray-100 rounded border text-sm px-1">{{ formatBytes(newMessageImage.size) }}</div>
+                            <div class="attachment-card__body">
+                                <div class="attachment-card__title">Image Attachment</div>
+                                <div class="attachment-card__meta">{{ formatBytes(newMessageImage.size) }}</div>
                             </div>
-
+                            <button @click.stop="removeImageAttachment" type="button" class="attachment-card__remove">
+                                <MaterialDesignIcon icon-name="close" class="w-4 h-4"/>
+                            </button>
                         </div>
-                    </div>
 
-                    <!-- audio attachment -->
-                    <div v-if="newMessageAudio" class="mb-2">
-                        <div class="flex flex-wrap gap-1">
-                            <div class="flex border border-gray-300 dark:border-zinc-800 rounded text-gray-700 divide-x divide-gray-300 overflow-hidden">
-
-                                <div class="flex p-1">
-
-                                    <!-- audio preview -->
-                                    <div>
-                                        <audio controls class="h-10">
-                                            <source :src="newMessageAudio.audio_preview_url" type="audio/wav"/>
-                                        </audio>
-                                    </div>
-
-                                    <!-- encoded file size -->
-                                    <div class="my-auto px-1 text-sm text-gray-500">
-                                        {{ formatBytes(newMessageAudio.audio_blob.size) }}
-                                    </div>
-
-                                </div>
-
-                                <!-- remove audio attachment -->
-                                <div @click="removeAudioAttachment" class="flex my-auto text-sm text-gray-500 h-full px-1 hover:bg-gray-200 cursor-pointer">
-                                    <svg class="w-5 h-5 my-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
-                                    </svg>
-                                </div>
-
+                        <!-- audio attachment -->
+                        <div v-if="newMessageAudio" class="attachment-card">
+                            <div class="attachment-card__body w-full">
+                                <div class="attachment-card__title">Voice Note</div>
+                                <div class="attachment-card__meta">{{ formatBytes(newMessageAudio.audio_blob.size) }}</div>
+                                <audio controls class="w-full mt-2 rounded-full bg-white/60 dark:bg-zinc-800/70">
+                                    <source :src="newMessageAudio.audio_preview_url" type="audio/wav"/>
+                                </audio>
                             </div>
+                            <button @click="removeAudioAttachment" type="button" class="attachment-card__remove">
+                                <MaterialDesignIcon icon-name="delete" class="w-4 h-4"/>
+                            </button>
                         </div>
-                    </div>
 
-                    <!-- file attachments -->
-                    <div v-if="newMessageFiles.length > 0" class="mb-2">
-                        <div class="flex flex-wrap gap-1">
-                            <div v-for="file in newMessageFiles" class="flex border border-gray-300 dark:border-zinc-800 rounded text-gray-700 divide-x divide-gray-300 overflow-hidden dark:border-zinc-800">
-                                <div class="my-auto px-1">
-                                    <span class="mr-1">{{ file.name }}</span>
-                                    <span class="my-auto text-sm text-gray-500">{{ formatBytes(file.size) }}</span>
+                        <!-- file attachments -->
+                        <div v-if="newMessageFiles.length > 0" class="flex flex-wrap gap-2">
+                            <div v-for="file in newMessageFiles" :key="file.name + file.size" class="attachment-chip">
+                                <div class="flex items-center gap-2">
+                                    <MaterialDesignIcon icon-name="paperclip" class="w-4 h-4 text-gray-500 dark:text-gray-300"/>
+                                    <div class="text-sm text-gray-800 dark:text-gray-200 truncate max-w-[160px]">{{ file.name }}</div>
+                                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ formatBytes(file.size) }}</span>
                                 </div>
-                                <div @click="removeFileAttachment(file)" class="flex my-auto text-sm text-gray-500 h-full px-1 hover:bg-gray-200 cursor-pointer">
-                                    <svg class="w-5 h-5 my-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
-                                    </svg>
-                                </div>
+                                <button @click="removeFileAttachment(file)" type="button" class="attachment-chip__remove">
+                                    <MaterialDesignIcon icon-name="close" class="w-3.5 h-3.5"/>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -327,33 +326,18 @@
                         placeholder="Send a message..."></textarea>
 
                     <!-- action button -->
-                    <div class="flex mt-2">
-
-                        <!-- add files -->
-                        <button @click="addFilesToMessage" type="button" class="my-auto mr-1 inline-flex items-center gap-x-1 rounded-md bg-gray-500 px-2.5 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-gray-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 dark:bg-zinc-800 dark:text-white dark:hover:bg-zinc-700 dark:focus-visible:outline-zinc-500">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5">
-                                <path fill-rule="evenodd" d="M5.625 1.5H9a3.75 3.75 0 0 1 3.75 3.75v1.875c0 1.036.84 1.875 1.875 1.875H16.5a3.75 3.75 0 0 1 3.75 3.75v7.875c0 1.035-.84 1.875-1.875 1.875H5.625a1.875 1.875 0 0 1-1.875-1.875V3.375c0-1.036.84-1.875 1.875-1.875ZM12.75 12a.75.75 0 0 0-1.5 0v2.25H9a.75.75 0 0 0 0 1.5h2.25V18a.75.75 0 0 0 1.5 0v-2.25H15a.75.75 0 0 0 0-1.5h-2.25V12Z" clip-rule="evenodd" />
-                                <path d="M14.25 5.25a5.23 5.23 0 0 0-1.279-3.434 9.768 9.768 0 0 1 6.963 6.963A5.23 5.23 0 0 0 16.5 7.5h-1.875a.375.375 0 0 1-.375-.375V5.25Z" />
-                            </svg>
-                            <span class="ml-1 hidden xl:inline-block whitespace-nowrap">Add Files</span>
+                    <div class="flex flex-wrap gap-2 items-center mt-3">
+                        <button @click="addFilesToMessage" type="button" class="attachment-action-button">
+                            <MaterialDesignIcon icon-name="paperclip-plus" class="w-4 h-4"/>
+                            <span>Add Files</span>
                         </button>
-
-                        <!-- add image -->
-                        <div>
-                            <AddImageButton @add-image="onImageSelected"/>
-                        </div>
-
-                        <!-- add audio -->
-                        <div>
-                            <AddAudioButton
-                                :is-recording-audio-attachment="isRecordingAudioAttachment"
-                                @start-recording="startRecordingAudioAttachment($event)"
-                                @stop-recording="stopRecordingAudioAttachment">
-                                <span>Recording: {{ audioAttachmentRecordingDuration }}</span>
-                            </AddAudioButton>
-                        </div>
-
-                        <!-- send message -->
+                        <AddImageButton @add-image="onImageSelected"/>
+                        <AddAudioButton
+                            :is-recording-audio-attachment="isRecordingAudioAttachment"
+                            @start-recording="startRecordingAudioAttachment($event)"
+                            @stop-recording="stopRecordingAudioAttachment">
+                            <span>Recording: {{ audioAttachmentRecordingDuration }}</span>
+                        </AddAudioButton>
                         <div class="ml-auto my-auto">
                             <SendMessageButton
                                 @send="sendMessage"
@@ -362,7 +346,6 @@
                                 :can-send-message="canSendMessage"
                                 :delivery-method="newMessageDeliveryMethod"/>
                         </div>
-
                     </div>
 
                 </div>
@@ -1205,6 +1188,23 @@ export default {
         formatBytes: function(bytes) {
             return Utils.formatBytes(bytes);
         },
+        base64ByteLength(base64String) {
+            if(!base64String){
+                return 0;
+            }
+            const padding = (base64String.match(/=+$/) || [""])[0].length;
+            return Math.floor(base64String.length * 3 / 4) - padding;
+        },
+        formatBase64Bytes(base64String) {
+            return this.formatBytes(this.base64ByteLength(base64String));
+        },
+        openConversationPopout() {
+            if (!this.selectedPeer) return;
+            const destinationHash = this.selectedPeer.destination_hash || "";
+            const encodedHash = encodeURIComponent(destinationHash);
+            const url = `${window.location.origin}${window.location.pathname}#/popout/messages/${encodedHash}`;
+            window.open(url, "_blank", "width=960,height=720,noopener");
+        },
         onFileInputChange: function(event) {
             for(const file of event.target.files){
                 this.newMessageFiles.push(file);
@@ -1618,3 +1618,33 @@ export default {
     },
 }
 </script>
+
+<style scoped>
+.attachment-card {
+    @apply relative flex gap-3 border border-gray-200 bg-white/80 dark:border-zinc-800 dark:bg-zinc-900/70 rounded-2xl p-3 shadow-sm;
+}
+.attachment-card__preview {
+    @apply w-24 h-24 overflow-hidden rounded-xl bg-gray-100 dark:bg-zinc-800 cursor-pointer;
+}
+.attachment-card__body {
+    @apply flex-1;
+}
+.attachment-card__title {
+    @apply text-sm font-semibold text-gray-800 dark:text-gray-100;
+}
+.attachment-card__meta {
+    @apply text-xs text-gray-500 dark:text-gray-400;
+}
+.attachment-card__remove {
+    @apply absolute top-2 right-2 inline-flex items-center justify-center w-6 h-6 rounded-full bg-gray-200 dark:bg-zinc-800 text-gray-600 dark:text-gray-200 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/40;
+}
+.attachment-chip {
+    @apply flex items-center justify-between gap-2 border border-gray-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/70 rounded-full px-3 py-1 text-xs shadow-sm;
+}
+.attachment-chip__remove {
+    @apply inline-flex items-center justify-center text-gray-500 dark:text-gray-300 hover:text-red-500;
+}
+.attachment-action-button {
+    @apply inline-flex items-center gap-1 rounded-full border border-gray-200 dark:border-zinc-700 bg-white/90 dark:bg-zinc-900/80 px-3 py-1.5 text-xs font-semibold text-gray-800 dark:text-gray-100 shadow-sm hover:border-blue-400 dark:hover:border-blue-500 transition;
+}
+</style>
