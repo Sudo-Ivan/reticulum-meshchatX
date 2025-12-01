@@ -1,6 +1,6 @@
 # Reticulum MeshChatX
 
-A heavily customized fork of [Reticulum MeshChat](https://github.com/liamcottle/reticulum-meshchat)
+A heavily customized fork of [Reticulum MeshChat](https://github.com/liamcottle/reticulum-meshchat), any meaningful, stable and tested modifications will be submitted as a PR upstream. 
 
 ## Features of this fork
 
@@ -9,7 +9,7 @@ A heavily customized fork of [Reticulum MeshChat](https://github.com/liamcottle/
 - [x] Better config parsing
 - [x] Cancel page fetching or file downloads
 - [ ] Block users
-- [ ] Spam filter (based onkeywords)
+- [ ] Spam filter (based on keywords)
 - [ ] Multi-identity support
 - [x] More stats on about page
 - [x] Actions are pinned to full-length SHA hashes.
