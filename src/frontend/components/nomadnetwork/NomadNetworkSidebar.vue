@@ -12,7 +12,7 @@
 
         <div v-if="tab === 'favourites'" class="flex-1 flex flex-col min-h-0">
             <div class="p-3 border-b border-gray-200 dark:border-zinc-800">
-                <input v-model="favouritesSearchTerm" type="text" placeholder="Search favourites" class="input-field"/>
+                <input v-model="favouritesSearchTerm" type="text" :placeholder="`Search ${favourites.length} favourites...`" class="input-field"/>
             </div>
             <div class="flex-1 overflow-y-auto px-2 pb-4">
                 <div v-if="searchedFavourites.length > 0" class="space-y-2 pt-2">

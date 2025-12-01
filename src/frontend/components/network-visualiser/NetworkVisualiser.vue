@@ -3,38 +3,41 @@
         <!-- network -->
         <div id="network" class="w-full h-full"></div>
         <!-- controls -->
-        <div class="absolute flex bottom-0 left-0 bg-gray-100 dark:bg-zinc-900 p-2">
-            <div class="bg-white dark:bg-zinc-800 rounded shadow min-w-52">
-                <div @click="isShowingControls = !isShowingControls" class="flex text-gray-700 dark:text-gray-300 p-2 cursor-pointer">
-                    <div class="my-auto">Reticulum Network</div>
-                    <div class="flex ml-auto">
-                        <button 
-                            @click.stop="update" 
-                            type="button" 
-                            class="my-auto inline-flex items-center gap-x-1 rounded-md bg-gray-500 dark:bg-zinc-700 px-1 py-0.5 text-sm font-semibold text-white shadow-sm hover:bg-gray-400 dark:hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 dark:focus-visible:outline-zinc-600"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5 text-white">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
-                            </svg>
-                        </button>
-                    </div>
+        <div class="absolute bottom-4 left-4 z-10">
+            <div class="border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-2xl shadow-lg overflow-hidden min-w-[240px]">
+                <div @click="isShowingControls = !isShowingControls" class="flex items-center px-4 py-3 border-b border-gray-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/50 backdrop-blur-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors">
+                    <div class="flex-1 font-semibold text-gray-900 dark:text-zinc-100">Reticulum Network</div>
+                    <button 
+                        @click.stop="update" 
+                        type="button" 
+                        class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700 text-white shadow-sm transition-colors"
+                        :disabled="isUpdating"
+                    >
+                        <svg v-if="!isUpdating" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                        </svg>
+                        <svg v-else class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </button>
                 </div>
-                <div v-if="isShowingControls" class="divide-y dark:divide-zinc-700 text-gray-900 dark:text-white border-t border-gray-300 dark:border-zinc-700">
-                    <div class="px-1 py-2">
-                        <div class="flex items-start">
-                            <div class="flex items-center h-5">
-                                <input 
-                                    v-model="autoReload" 
-                                    type="checkbox" 
-                                    class="w-4 h-4 border border-gray-300 dark:border-zinc-600 rounded bg-gray-50 dark:bg-zinc-900 focus:ring-3 focus:ring-blue-300 dark:focus:ring-blue-800"
-                                >
-                            </div>
-                            <label class="ml-2 text-sm font-medium text-gray-900 dark:text-white">Auto Update (5 sec)</label>
-                        </div>
+                <div v-if="isShowingControls" class="px-4 py-3 space-y-3">
+                    <div class="flex items-center gap-2">
+                        <input 
+                            v-model="autoReload" 
+                            type="checkbox" 
+                            id="auto-reload"
+                            class="w-4 h-4 border border-gray-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-900 text-blue-600 focus:ring-2 focus:ring-blue-500/50 focus:ring-offset-0"
+                        >
+                        <label for="auto-reload" class="text-sm font-medium text-gray-900 dark:text-zinc-100 cursor-pointer">Auto Update (5 sec)</label>
                     </div>
-                    <div class="p-1">
-                        <div class="text-black dark:text-white">Interfaces</div>
-                        <div class="text-sm text-gray-700 dark:text-gray-300">{{ onlineInterfaces.length }} Online, {{ offlineInterfaces.length }} Offline</div>
+                    <div class="pt-2 border-t border-gray-200 dark:border-zinc-800">
+                        <div class="text-sm font-semibold text-gray-900 dark:text-zinc-100 mb-1">Interfaces</div>
+                        <div class="text-xs text-gray-600 dark:text-zinc-400">
+                            <span class="text-green-600 dark:text-green-400 font-medium">{{ onlineInterfaces.length }}</span> Online, 
+                            <span class="text-red-600 dark:text-red-400 font-medium">{{ offlineInterfaces.length }}</span> Offline
+                        </div>
                     </div>
                 </div>
             </div>
@@ -45,7 +48,24 @@
 <style>
 .vis-tooltip {
     color: white !important;
-    background: rgba(0, 0, 0, 0.75) !important;
+    background: rgba(0, 0, 0, 0.85) !important;
+    border-radius: 0.5rem !important;
+    padding: 0.5rem 0.75rem !important;
+    font-size: 0.875rem !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+}
+
+.dark .vis-tooltip {
+    background: rgba(24, 24, 27, 0.95) !important;
+    border: 1px solid rgba(63, 63, 70, 0.5) !important;
+}
+
+#network {
+    background-color: rgb(249, 250, 251);
+}
+
+.dark #network {
+    background-color: rgb(9, 9, 11);
 }
 </style>
 
@@ -53,6 +73,7 @@
 import "vis-network/styles/vis-network.css";
 import { Network } from "vis-network";
 import { DataSet } from "vis-data";
+import * as mdi from "@mdi/js";
 import Utils from "../../js/Utils";
 export default {
     name: 'NetworkVisualiser',
@@ -62,12 +83,15 @@ export default {
             autoReload: false,
             reloadInterval: null,
             isShowingControls: true,
+            isUpdating: false,
             interfaces: [],
             pathTable: [],
             announces: {},
+            conversations: {},
             network: null,
             nodes: new DataSet(),
             edges: new DataSet(),
+            iconCache: {},
         };
     },
     beforeUnmount() {
@@ -118,6 +142,70 @@ export default {
                 console.log(e);
             }
         },
+        async getConversations() {
+            try {
+                const response = await window.axios.get(`/api/v1/lxmf/conversations`);
+                this.conversations = {};
+                for(const conversation of response.data.conversations){
+                    this.conversations[conversation.destination_hash] = conversation;
+                }
+            } catch(e) {
+                console.log(e);
+            }
+        },
+        async createIconImage(iconName, foregroundColor, backgroundColor, size = 32) {
+            const cacheKey = `${iconName}-${foregroundColor}-${backgroundColor}-${size}`;
+            if(this.iconCache[cacheKey]){
+                return this.iconCache[cacheKey];
+            }
+
+            return new Promise((resolve) => {
+                const canvas = document.createElement('canvas');
+                canvas.width = size;
+                canvas.height = size;
+                const ctx = canvas.getContext('2d');
+
+                // draw background circle
+                ctx.fillStyle = backgroundColor;
+                ctx.beginPath();
+                ctx.arc(size / 2, size / 2, size / 2 - 1, 0, 2 * Math.PI);
+                ctx.fill();
+
+                // load MDI icon SVG
+                const iconSvg = this.getMdiIconSvg(iconName, foregroundColor);
+                const img = new Image();
+                const svgBlob = new Blob([iconSvg], { type: 'image/svg+xml' });
+                const url = URL.createObjectURL(svgBlob);
+                img.onload = () => {
+                    ctx.drawImage(img, size * 0.2, size * 0.2, size * 0.6, size * 0.6);
+                    URL.revokeObjectURL(url);
+                    const dataUrl = canvas.toDataURL();
+                    this.iconCache[cacheKey] = dataUrl;
+                    resolve(dataUrl);
+                };
+                img.onerror = () => {
+                    URL.revokeObjectURL(url);
+                    const dataUrl = canvas.toDataURL();
+                    this.iconCache[cacheKey] = dataUrl;
+                    resolve(dataUrl);
+                };
+                img.src = url;
+            });
+        },
+        getMdiIconSvg(iconName, foregroundColor) {
+            const mdiIconName = "mdi" + iconName.split("-").map((word) => {
+                return word.charAt(0).toUpperCase() + word.slice(1);
+            }).join("");
+            
+            const iconPath = mdi[mdiIconName] || mdi["mdiAccountOutline"];
+            
+            return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="${foregroundColor}" d="${iconPath}"/></svg>`;
+        },
+        async createMdiIconImage(iconName, size = 32) {
+            const foregroundColor = '#ffffff';
+            const backgroundColor = '#6b7280';
+            return await this.createIconImage(iconName, foregroundColor, backgroundColor, size);
+        },
         async init() {
 
             // create network ui
@@ -135,11 +223,23 @@ export default {
                 },
                 nodes: {
                     color: {
-                        border: "#000000",
+                        border: "#e5e7eb",
                         highlight: {
-                            border: "#000000",
+                            border: "#3b82f6",
                         },
                     },
+                    font: {
+                        color: "#111827",
+                        size: 14,
+                        background: "rgba(255, 255, 255, 0.9)",
+                    },
+                },
+                edges: {
+                    color: {
+                        color: "#9ca3af",
+                        highlight: "#3b82f6",
+                    },
+                    width: 2,
                 },
                 physics: {
                     barnesHut: {
@@ -256,13 +356,23 @@ export default {
         },
         async update() {
 
-            await this.getConfig();
-            await this.getInterfaceStats();
-            await this.getPathTable();
-            await this.getAnnounces();
+            this.isUpdating = true;
+            try {
+                await this.getConfig();
+                await this.getInterfaceStats();
+                await this.getPathTable();
+                await this.getAnnounces();
+                await this.getConversations();
+            } finally {
+                this.isUpdating = false;
+            }
 
             const nodes = [];
             const edges = [];
+
+            const isDarkMode = document.documentElement.classList.contains('dark');
+            const fontColor = isDarkMode ? "#f4f4f5" : "#111827";
+            const fontBackground = isDarkMode ? "rgba(24, 24, 27, 0.9)" : "rgba(255, 255, 255, 0.9)";
 
             // add me
             nodes.push({
@@ -275,8 +385,8 @@ export default {
                     `Identity: ${this.config?.identity_hash ?? 'Unknown'}`,
                 ].join("\n"),
                 font: {
-                    color: "#000000",
-                    background: "#ffffff",
+                    color: fontColor,
+                    background: fontBackground,
                 },
             });
 
@@ -305,8 +415,8 @@ export default {
                     ].join("\n"),
                     size: 30,
                     font: {
-                        color: "#000000",
-                        background: '#ffffff',
+                        color: fontColor,
+                        background: fontBackground,
                     },
                     shape: "circularImage",
                     image: entry.status ? "/assets/images/network-visualiser/interface_connected.png" : "/assets/images/network-visualiser/interface_disconnected.png",
@@ -322,12 +432,9 @@ export default {
                         id: `${entry.parent_interface_name}~${entry.name}`,
                         from: entry.parent_interface_name,
                         to: entry.name,
-                        color: "transparent",
+                        color: entry.status ? "#22c55e" : "#ef4444",
+                        width: 3,
                         length: 300,
-                        background: {
-                            enabled: true,
-                            color: entry.status ? "#22c55e" : "#ef4444",
-                        },
                     });
                 } else {
                     // add edge from me to interface
@@ -335,12 +442,9 @@ export default {
                         id: `me~${entry.name}`,
                         from: "me",
                         to: entry.name,
-                        color: "transparent",
+                        color: entry.status ? "#22c55e" : "#ef4444",
+                        width: 3,
                         length: 300,
-                        background: {
-                            enabled: true,
-                            color: entry.status ? "#22c55e" : "#ef4444",
-                        },
                     });
                 }
 
@@ -375,9 +479,22 @@ export default {
                 if(announce.aspect === "lxmf.delivery"){
 
                     const name = announce.custom_display_name ?? announce.display_name;
+                    const conversation = this.conversations[announce.destination_hash];
 
                     node.shape = "circularImage";
-                    node.image = entry.hops === 1 ? "/assets/images/network-visualiser/user_1hop.png" : "/assets/images/network-visualiser/user.png";
+                    
+                    if(conversation?.lxmf_user_icon){
+                        const iconImage = await this.createIconImage(
+                            conversation.lxmf_user_icon.icon_name,
+                            conversation.lxmf_user_icon.foreground_colour,
+                            conversation.lxmf_user_icon.background_colour,
+                            40
+                        );
+                        node.image = iconImage;
+                        node.size = 30;
+                    } else {
+                        node.image = entry.hops === 1 ? "/assets/images/network-visualiser/user_1hop.png" : "/assets/images/network-visualiser/user.png";
+                    }
 
                     node.label = name;
                     node.title = [
@@ -423,7 +540,8 @@ export default {
                     id: `${entry.interface}~${entry.hash}`,
                     from: entry.interface,
                     to: entry.hash,
-                    color: "gray",
+                    color: isDarkMode ? "#71717a" : "#9ca3af",
+                    width: 2,
                 });
 
             }
@@ -504,3 +622,4 @@ export default {
     },
 }
 </script>
+
