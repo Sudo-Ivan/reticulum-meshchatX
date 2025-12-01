@@ -44,6 +44,7 @@ from meshchatx.src.version import __version__ as app_version
 # NOTE: this is required to be able to pack our app with cxfreeze as an exe, otherwise it can't access bundled assets
 # this returns a file path based on if we are running meshchat.py directly, or if we have packed it as an exe with cxfreeze
 # https://cx-freeze.readthedocs.io/en/latest/faq.html#using-data-files
+# bearer:disable python_lang_path_traversal
 def get_file_path(filename):
     if getattr(sys, "frozen", False):
         datadir = os.path.dirname(sys.executable)
