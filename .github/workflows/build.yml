@@ -94,70 +94,79 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Check if build should run
-        id: should_build
-        run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
-            echo "should_run=true" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            if [ "${{ github.event.inputs[matrix.build_input] }}" = "true" ]; then
-              echo "should_run=true" >> $GITHUB_OUTPUT
-            else
-              echo "should_run=false" >> $GITHUB_OUTPUT
-            fi
-          else
-            echo "should_run=false" >> $GITHUB_OUTPUT
-          fi
-
       - name: Clone Repo
-        if: steps.should_build.outputs.should_run == 'true'
+        if: |
+          github.event_name == 'push' ||
+          (github.event_name == 'workflow_dispatch' && inputs[matrix.build_input] == true)
         uses: actions/checkout@50fbc622fc4ef5163becd7fab6573eac35f8462e # v1
 
       - name: Install NodeJS
-        if: steps.should_build.outputs.should_run == 'true'
+        if: |
+          github.event_name == 'push' ||
+          (github.event_name == 'workflow_dispatch' && inputs[matrix.build_input] == true)
         uses: actions/setup-node@f1f314fca9dfce2769ece7d933488f076716723e # v1
         with:
           node-version: ${{ matrix.node }}
 
       - name: Install Python
-        if: steps.should_build.outputs.should_run == 'true'
+        if: |
+          github.event_name == 'push' ||
+          (github.event_name == 'workflow_dispatch' && inputs[matrix.build_input] == true)
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: ${{ matrix.python }}
 
       - name: Install Poetry
-        if: steps.should_build.outputs.should_run == 'true'
+        if: |
+          github.event_name == 'push' ||
+          (github.event_name == 'workflow_dispatch' && inputs[matrix.build_input] == true)
         run: python -m pip install --upgrade pip poetry
 
       - name: Sync versions
-        if: steps.should_build.outputs.should_run == 'true'
+        if: |
+          github.event_name == 'push' ||
+          (github.event_name == 'workflow_dispatch' && inputs[matrix.build_input] == true)
         run: python scripts/sync_version.py
 
       - name: Install Python Deps
-        if: steps.should_build.outputs.should_run == 'true'
+        if: |
+          github.event_name == 'push' ||
+          (github.event_name == 'workflow_dispatch' && inputs[matrix.build_input] == true)
         run: python -m poetry install
 
       - name: Install NodeJS Deps
-        if: steps.should_build.outputs.should_run == 'true'
+        if: |
+          github.event_name == 'push' ||
+          (github.event_name == 'workflow_dispatch' && inputs[matrix.build_input] == true)
         run: npm install
 
       - name: Prepare frontend directory
-        if: steps.should_build.outputs.should_run == 'true'
+        if: |
+          github.event_name == 'push' ||
+          (github.event_name == 'workflow_dispatch' && inputs[matrix.build_input] == true)
         run: python scripts/prepare_frontend_dir.py
 
       - name: Download frontend artifact
-        if: steps.should_build.outputs.should_run == 'true'
+        if: |
+          github.event_name == 'push' ||
+          (github.event_name == 'workflow_dispatch' && inputs[matrix.build_input] == true)
         uses: actions/download-artifact@v4
         with:
           name: frontend-build
           path: meshchatx/public
 
       - name: Install patchelf
-        if: steps.should_build.outputs.should_run == 'true' && matrix.name == 'linux'
+        if: |
+          matrix.name == 'linux' &&
+          (github.event_name == 'push' ||
+          (github.event_name == 'workflow_dispatch' && inputs[matrix.build_input] == true))
         run: sudo apt-get update && sudo apt-get install -y patchelf
 
       - name: Build Python wheel
-        if: steps.should_build.outputs.should_run == 'true' && matrix.name == 'linux'
+        if: |
+          matrix.name == 'linux' &&
+          (github.event_name == 'push' ||
+          (github.event_name == 'workflow_dispatch' && inputs[matrix.build_input] == true))
         run: |
           python -m poetry build -f wheel
           mkdir -p python-dist
@@ -165,19 +174,76 @@ jobs:
           rm -rf dist
 
       - name: Build Electron App
-        if: steps.should_build.outputs.should_run == 'true'
+        if: |
+          github.event_name == 'push' ||
+          (github.event_name == 'workflow_dispatch' && inputs[matrix.build_input] == true)
         run: npm run dist-prebuilt
 
+      - name: Upload build artifacts
+        if: |
+          github.event_name == 'push' ||
+          (github.event_name == 'workflow_dispatch' && inputs[matrix.build_input] == true)
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.name }}
+          path: |
+            dist/*-win-installer.exe
+            dist/*-win-portable.exe
+            dist/*-mac.dmg
+            dist/*-linux.AppImage
+            dist/*-linux.deb
+            python-dist/*.whl
+          if-no-files-found: ignore
+
+  create_release:
+    name: Create Release
+    needs: build_desktop
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Display structure of downloaded files
+        run: ls -R artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+          find artifacts -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.whl" \) -exec cp {} release-assets/ \;
+          ls -lh release-assets/
+
+      - name: Generate SHA256 checksums
+        run: |
+          cd release-assets
+          echo "## SHA256 Checksums" > release-body.md
+          echo "" >> release-body.md
+          
+          for file in *.exe *.dmg *.AppImage *.deb *.whl 2>/dev/null; do
+            if [ -f "$file" ]; then
+              sha256sum "$file" | tee "${file}.sha256"
+              echo "\`$(cat "${file}.sha256")\`" >> release-body.md
+            fi
+          done
+          
+          echo "" >> release-body.md
+          echo "Individual \`.sha256\` files are included for each artifact." >> release-body.md
+          
+          cat release-body.md
+          echo ""
+          echo "Generated .sha256 files:"
+          ls -1 *.sha256 2>/dev/null || echo "No .sha256 files found"
+
       - name: Create Release
-        if: steps.should_build.outputs.should_run == 'true'
         uses: ncipollo/release-action@b7eabc95ff50cbeeedec83973935c8f306dfcd0b # v1
         with:
           draft: true
-          allowUpdates: true
-          replacesArtifacts: true
-          omitDraftDuringUpdate: true
-          omitNameDuringUpdate: true
-          artifacts: ${{ matrix.release_artifacts }}
+          artifacts: "release-assets/*"
+          bodyFile: "release-assets/release-body.md"
 
   build_docker:
     runs-on: ubuntu-latest
