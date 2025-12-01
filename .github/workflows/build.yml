@@ -4,10 +4,33 @@ on:
   push:
     tags:
       - "*"
+  workflow_dispatch:
+    inputs:
+      build_windows:
+        description: 'Build Windows'
+        required: false
+        default: 'true'
+        type: boolean
+      build_mac:
+        description: 'Build macOS'
+        required: false
+        default: 'true'
+        type: boolean
+      build_linux:
+        description: 'Build Linux'
+        required: false
+        default: 'true'
+        type: boolean
+      build_docker:
+        description: 'Build Docker'
+        required: false
+        default: 'true'
+        type: boolean
 
 jobs:
   build_windows:
     runs-on: windows-latest
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.build_windows == 'true')
     permissions:
       contents: write
     steps:
@@ -49,6 +72,7 @@ jobs:
 
   build_mac:
     runs-on: macos-13
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.build_mac == 'true')
     permissions:
       contents: write
     steps:
@@ -90,6 +114,7 @@ jobs:
 
   build_linux:
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.build_linux == 'true')
     permissions:
       contents: write
     steps:
@@ -134,6 +159,7 @@ jobs:
 
   build_docker:
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.build_docker == 'true')
     permissions:
       packages: write
       contents: read
