@@ -1,13 +1,19 @@
 # Reticulum MeshChatX
 
-Custom fork of [Reticulum MeshChat](https://github.com/liamcottle/reticulum-meshchat) 
+A heavily customized fork of [Reticulum MeshChat](https://github.com/liamcottle/reticulum-meshchat)
 
 ## Features of this fork
 
-- More stats in about page.
-- Exe and Appimage builds with Python 3.13 and Node.js 22
-- Actions are pinned to full-length SHA hashes.
-- Docker images are smaller and use SHA256 hashes for the images.
+- [x] Custom UI/UX (actively being improved)
+- [ ] Ability to set stamps
+- [x] Better config parsing
+- [x] Cancel page fetching or file downloads
+- [ ] Block users
+- [ ] Spam filter (based onkeywords)
+- [ ] Multi-identity support
+- [x] More stats on about page
+- [x] Actions are pinned to full-length SHA hashes.
+- [x] Docker images are smaller and use SHA256 hashes for the images.
 
 ## Usage
 
