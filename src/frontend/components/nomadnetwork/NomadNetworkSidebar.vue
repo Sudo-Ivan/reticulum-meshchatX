@@ -15,7 +15,7 @@
                 <input v-model="favouritesSearchTerm" type="text" placeholder="Search favourites" class="input-field"/>
             </div>
             <div class="flex-1 overflow-y-auto px-2 pb-4">
-                <div v-if="searchedFavourites.length > 0" class="space-y-2">
+                <div v-if="searchedFavourites.length > 0" class="space-y-2 pt-2">
                     <div
                         v-for="favourite of searchedFavourites"
                         :key="favourite.destination_hash"
@@ -70,7 +70,7 @@
                 <input v-model="nodesSearchTerm" type="text" placeholder="Search announces" class="input-field"/>
             </div>
             <div class="flex-1 overflow-y-auto px-2 pb-4">
-                <div v-if="searchedNodes.length > 0" class="space-y-2">
+                <div v-if="searchedNodes.length > 0" class="space-y-2 pt-2">
                     <div v-for="node of searchedNodes" :key="node.destination_hash" @click="onNodeClick(node)" class="announce-card" :class="{ 'announce-card--active': node.destination_hash === selectedDestinationHash }">
                         <div class="announce-card__icon">
                             <MaterialDesignIcon icon-name="satellite-uplink" class="w-5 h-5"/>

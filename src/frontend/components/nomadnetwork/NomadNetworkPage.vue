@@ -39,9 +39,9 @@
             </div>
 
             <!-- node info -->
-            <div class="my-auto dark:text-gray-100 flex-1 min-w-0">
+            <div class="my-auto dark:text-gray-100 flex-1 min-w-0 flex items-baseline gap-1">
                 <span class="font-semibold truncate inline-block max-w-xs sm:max-w-sm" :title="selectedNode.display_name">{{ selectedNode.display_name }}</span>
-                <span v-if="selectedNodePath" @click="onDestinationPathClick(selectedNodePath)" class="text-sm cursor-pointer"> - {{ selectedNodePath.hops }} {{ selectedNodePath.hops === 1 ? 'hop' : 'hops' }} away</span>
+                <span v-if="selectedNodePath" @click="onDestinationPathClick(selectedNodePath)" class="text-sm cursor-pointer whitespace-nowrap"> - {{ selectedNodePath.hops }} {{ selectedNodePath.hops === 1 ? 'hop' : 'hops' }} away</span>
             </div>
 
             <!-- identify button -->

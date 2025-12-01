@@ -1,61 +1,62 @@
 <template>
-    <div class="flex w-full h-full bg-gray-100 dark:bg-zinc-950" :class="{'dark': config?.theme === 'dark'}">
-        <div class="mx-auto my-auto w-full max-w-xl p-4">
+    <div class="flex w-full h-full bg-gray-50 dark:bg-zinc-950" :class="{'dark': config?.theme === 'dark'}">
+        <div class="mx-auto my-auto w-full max-w-2xl p-4 sm:p-6">
 
             <!-- in active call -->
             <div v-if="isWebsocketConnected" class="w-full">
-                <div class="border rounded-xl bg-white shadow w-full">
-                    <div class="flex border-b border-gray-300 text-gray-700 p-2">
+                <div class="border border-gray-200 dark:border-zinc-800 rounded-2xl bg-white dark:bg-zinc-900 shadow-lg w-full overflow-hidden">
+                    <div class="flex items-center border-b border-gray-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm px-4 py-3">
                         <div class="my-auto mr-2">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 0 0 2.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 0 1-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 0 0-1.091-.852H4.5A2.25 2.25 0 0 0 2.25 4.5v2.25Z" />
                             </svg>
                         </div>
-                        <div class="my-auto">Active Call</div>
+                        <div class="font-semibold text-gray-900 dark:text-zinc-100">Active Call</div>
                     </div>
-                    <div class="border-b border-gray-300 text-gray-700 p-2">
+                    <div class="border-b border-gray-200 dark:border-zinc-800 p-4 space-y-3">
 
-                        <div class="mb-2">
-                            <div class="mb-1 text-sm font-medium text-gray-900">Call Hash</div>
-                            <div class="text-xs text-gray-600">{{ audioCall?.hash || "Unknown" }}</div>
+                        <div>
+                            <div class="mb-1 text-xs font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wide">Call Hash</div>
+                            <div class="text-sm text-gray-900 dark:text-zinc-100 font-mono">{{ audioCall?.hash || "Unknown" }}</div>
                         </div>
 
-                        <div class="mb-2">
-                            <div class="mb-1 text-sm font-medium text-gray-900">Remote Identity Hash</div>
-                            <div class="text-xs text-gray-600">{{ audioCall?.remote_identity_hash || "Unknown" }}</div>
+                        <div>
+                            <div class="mb-1 text-xs font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wide">Remote Identity Hash</div>
+                            <div class="text-sm text-gray-900 dark:text-zinc-100 font-mono">{{ audioCall?.remote_identity_hash || "Unknown" }}</div>
                         </div>
 
-                        <div class="mb-2">
-                            <div class="mb-1 text-sm font-medium text-gray-900">Remote Destination Hash</div>
-                            <div class="text-xs text-gray-600">{{ audioCall?.remote_destination_hash || "Unknown" }}</div>
+                        <div>
+                            <div class="mb-1 text-xs font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wide">Remote Destination Hash</div>
+                            <div class="text-sm text-gray-900 dark:text-zinc-100 font-mono">{{ audioCall?.remote_destination_hash || "Unknown" }}</div>
                         </div>
 
-                        <div class="mb-2">
-                            <div class="mb-1 text-sm font-medium text-gray-900">Path</div>
-                            <div class="text-xs text-gray-600">
+                        <div>
+                            <div class="mb-1 text-xs font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wide">Path</div>
+                            <div class="text-sm text-gray-900 dark:text-zinc-100">
                                 <span v-if="audioCall?.path">{{ audioCall.path.hops }} {{ audioCall.path.hops === 1 ? 'hop' : 'hops' }} away via {{ audioCall.path.next_hop_interface }}</span>
                                 <span v-else>Unknown</span>
                             </div>
                         </div>
 
-                        <div class="mb-2">
-                            <div class="mb-1 text-sm font-medium text-gray-900">TX Bytes</div>
-                            <div class="text-xs text-gray-600">{{ formatBytes(txBytes) }}</div>
-                        </div>
-
-                        <div class="mb-2">
-                            <div class="mb-1 text-sm font-medium text-gray-900">RX Bytes</div>
-                            <div class="text-xs text-gray-600">{{ formatBytes(rxBytes) }}</div>
-                        </div>
-
-                        <div class="mb-2">
-                            <div class="mb-1 text-sm font-medium text-gray-900">Incoming Audio</div>
-                            <div class="text-xs text-gray-600">{{ remoteAudioCodec || "Unknown" }}</div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <div class="mb-1 text-xs font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wide">TX Bytes</div>
+                                <div class="text-sm text-gray-900 dark:text-zinc-100 font-semibold">{{ formatBytes(txBytes) }}</div>
+                            </div>
+                            <div>
+                                <div class="mb-1 text-xs font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wide">RX Bytes</div>
+                                <div class="text-sm text-gray-900 dark:text-zinc-100 font-semibold">{{ formatBytes(rxBytes) }}</div>
+                            </div>
                         </div>
 
                         <div>
-                            <div class="mb-1 text-sm font-medium text-gray-900">Outgoing Audio</div>
-                            <select v-model="codecMode" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5">
+                            <div class="mb-1 text-xs font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wide">Incoming Audio</div>
+                            <div class="text-sm text-gray-900 dark:text-zinc-100">{{ remoteAudioCodec || "Unknown" }}</div>
+                        </div>
+
+                        <div>
+                            <div class="mb-1 text-xs font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wide">Outgoing Audio</div>
+                            <select v-model="codecMode" class="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 text-gray-900 dark:text-zinc-100 text-sm rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 block w-full px-3 py-2 shadow-sm transition-all">
                                 <option value="MODE_3200">Codec2 3200</option>
                                 <option value="MODE_2400">Codec2 2400</option>
                                 <option value="MODE_1600">Codec2 1600</option>
@@ -69,10 +70,10 @@
                         </div>
 
                     </div>
-                    <div class="flex text-gray-900 p-2">
+                    <div class="flex items-center gap-2 px-4 py-3 bg-gray-50 dark:bg-zinc-900/50">
 
                         <!-- toggle mic -->
-                        <button @click="isMicMuted = !isMicMuted" type="button" :class="[ isMicMuted ? 'bg-red-500 hover:bg-red-400 focus-visible:outline-red-500' : 'bg-gray-500 hover:bg-gray-400 focus-visible:outline-gray-500' ]" class="my-auto inline-flex items-center gap-x-1 rounded-full p-2 text-sm font-semibold text-white shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">
+                        <button @click="isMicMuted = !isMicMuted" type="button" :class="[ isMicMuted ? 'bg-red-600 hover:bg-red-700 dark:bg-red-600 dark:hover:bg-red-700 focus-visible:outline-red-500' : 'bg-gray-600 hover:bg-gray-700 dark:bg-gray-600 dark:hover:bg-gray-700 focus-visible:outline-gray-500' ]" class="inline-flex items-center justify-center gap-x-1.5 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">
                             <svg v-if="isMicMuted" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 256 256" class="w-5 h-5">
                                 <path d="M213.38,229.92a8,8,0,0,1-11.3-.54l-30.92-34A78.83,78.83,0,0,1,136,207.59V240a8,8,0,0,1-16,0V207.6A80.11,80.11,0,0,1,48,128a8,8,0,0,1,16,0,64.07,64.07,0,0,0,64,64,63.41,63.41,0,0,0,32.21-8.68l-11.1-12.2A48,48,0,0,1,80,128V95.09L42.08,53.38A8,8,0,0,1,53.92,42.62l160,176A8,8,0,0,1,213.38,229.92Zm-24.19-63.13a7.88,7.88,0,0,0,3.51.82,8,8,0,0,0,7.19-4.49A79.16,79.16,0,0,0,208,128a8,8,0,0,0-16,0,63.32,63.32,0,0,1-6.48,28.09A8,8,0,0,0,189.19,166.79Zm-27.33-29.22A8,8,0,0,0,175.74,133a49.49,49.49,0,0,0,.26-5V64A48,48,0,0,0,84,44.87a8,8,0,0,0,1.41,8.57Z"></path>
                             </svg>
@@ -82,7 +83,7 @@
                         </button>
 
                         <!-- toggle sound -->
-                        <button @click="isSoundMuted = !isSoundMuted" type="button" :class="[ isSoundMuted ? 'bg-red-500 hover:bg-red-400 focus-visible:outline-red-500' : 'bg-gray-500 hover:bg-gray-400 focus-visible:outline-gray-500' ]" class="ml-1 my-auto inline-flex items-center gap-x-1 rounded-full p-2 text-sm font-semibold text-white shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">
+                        <button @click="isSoundMuted = !isSoundMuted" type="button" :class="[ isSoundMuted ? 'bg-red-600 hover:bg-red-700 dark:bg-red-600 dark:hover:bg-red-700 focus-visible:outline-red-500' : 'bg-gray-600 hover:bg-gray-700 dark:bg-gray-600 dark:hover:bg-gray-700 focus-visible:outline-gray-500' ]" class="inline-flex items-center justify-center gap-x-1.5 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">
                             <svg v-if="isSoundMuted" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5">
                                 <path d="M10.047 3.062a.75.75 0 0 1 .453.688v12.5a.75.75 0 0 1-1.264.546L5.203 13H2.667a.75.75 0 0 1-.7-.48A6.985 6.985 0 0 1 1.5 10c0-.887.165-1.737.468-2.52a.75.75 0 0 1 .7-.48h2.535l4.033-3.796a.75.75 0 0 1 .811-.142ZM13.78 7.22a.75.75 0 1 0-1.06 1.06L14.44 10l-1.72 1.72a.75.75 0 0 0 1.06 1.06l1.72-1.72 1.72 1.72a.75.75 0 1 0 1.06-1.06L16.56 10l1.72-1.72a.75.75 0 0 0-1.06-1.06L15.5 8.94l-1.72-1.72Z" />
                             </svg>
@@ -93,7 +94,7 @@
                         </button>
 
                         <!-- leave call -->
-                        <button @click="leaveCall" type="button" class="ml-auto mr-1 my-auto inline-flex items-center gap-x-1 rounded-full bg-blue-500 p-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500">
+                        <button @click="leaveCall" type="button" class="ml-auto inline-flex items-center gap-x-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5">
                                 <path fill-rule="evenodd" d="M7.793 2.232a.75.75 0 0 1-.025 1.06L3.622 7.25h10.003a5.375 5.375 0 0 1 0 10.75H10.75a.75.75 0 0 1 0-1.5h2.875a3.875 3.875 0 0 0 0-7.75H3.622l4.146 3.957a.75.75 0 0 1-1.036 1.085l-5.5-5.25a.75.75 0 0 1 0-1.085l5.5-5.25a.75.75 0 0 1 1.06.025Z" clip-rule="evenodd" />
                             </svg>
@@ -101,7 +102,7 @@
                         </button>
 
                         <!-- hangup call -->
-                        <button @click="hangupCall(audioCall.hash)" type="button" class="my-auto inline-flex items-center gap-x-1 rounded-full bg-red-500 p-2 text-sm font-semibold text-white shadow-sm hover:bg-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500">
+                        <button @click="hangupCall(audioCall.hash)" type="button" class="inline-flex items-center gap-x-1.5 rounded-xl bg-red-600 hover:bg-red-700 dark:bg-red-600 dark:hover:bg-red-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 rotate-[135deg] translate-y-0.5">
                                 <path fill-rule="evenodd" d="M2 3.5A1.5 1.5 0 0 1 3.5 2h1.148a1.5 1.5 0 0 1 1.465 1.175l.716 3.223a1.5 1.5 0 0 1-1.052 1.767l-.933.267c-.41.117-.643.555-.48.95a11.542 11.542 0 0 0 6.254 6.254c.395.163.833-.07.95-.48l.267-.933a1.5 1.5 0 0 1 1.767-1.052l3.223.716A1.5 1.5 0 0 1 18 15.352V16.5a1.5 1.5 0 0 1-1.5 1.5H15c-1.149 0-2.263-.15-3.326-.43A13.022 13.022 0 0 1 2.43 8.326 13.019 13.019 0 0 1 2 5V3.5Z" clip-rule="evenodd" />
                             </svg>
@@ -116,60 +117,56 @@
             <div v-else class="w-full space-y-2">
 
                 <!-- dialer -->
-                <div class="border rounded-xl bg-white shadow w-full overflow-hidden dark:border-zinc-900">
-                    <div class="flex border-b border-gray-300 text-gray-700 p-2 dark:bg-zinc-800 dark:text-white">
+                <div class="border border-gray-200 dark:border-zinc-800 rounded-2xl bg-white dark:bg-zinc-900 shadow-lg w-full overflow-hidden">
+                    <div class="flex items-center border-b border-gray-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm px-4 py-3">
                         <div class="my-auto mr-2">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 dark:text-white">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 0 0 2.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 0 1-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 0 0-1.091-.852H4.5A2.25 2.25 0 0 0 2.25 4.5v2.25Z" />
                             </svg>
                         </div>
-                        <div class="my-auto">Start a new Call</div>
+                        <div class="font-semibold text-gray-900 dark:text-zinc-100">Start a new Call</div>
                     </div>
-                    <div class="flex border-b border-gray-300 text-gray-900 p-2 space-x-2 dark:bg-zinc-700 dark:text-zinc-100 dark:border-zinc-800">
-                        <div class="flex-1">
-                            <input v-model="destinationHash" type="text" placeholder="Enter Destination Hash" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-100">
+                    <div class="p-4 space-y-3">
+                        <div class="flex gap-2">
+                            <input v-model="destinationHash" @keydown.enter.exact.prevent="initiateCall(destinationHash)" type="text" placeholder="Enter Destination Hash" class="flex-1 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 text-gray-900 dark:text-zinc-100 text-sm rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 px-4 py-2.5 shadow-sm transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500">
+                            <button @click="initiateCall(destinationHash)" :disabled="isInitiatingCall || !destinationHash || destinationHash.trim() === ''" type="button" :class="[ isInitiatingCall || !destinationHash || destinationHash.trim() === '' ? 'bg-gray-400 dark:bg-zinc-500 focus-visible:outline-gray-500 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 dark:bg-green-600 dark:hover:bg-green-700 focus-visible:outline-green-500' ]" class="inline-flex items-center gap-x-1.5 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">
+                                <svg v-if="isInitiatingCall" class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                <span v-if="isInitiatingCall">Calling...</span>
+                                <span v-else>Call</span>
+                            </button>
                         </div>
-                        <button @click="initiateCall(destinationHash)" :disabled="isInitiatingCall" type="button" :class="[ isInitiatingCall ? 'bg-gray-400 focus-visible:outline-gray-500' : 'bg-green-500 hover:bg-green-400 focus-visible:outline-green-500' ]" class="my-auto inline-flex items-center gap-x-1 rounded-md p-2 text-sm font-semibold text-white shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">
-                        <span v-if="isInitiatingCall">
-                            <span>Calling...</span>
-                        </span>
-                            <span v-else>Initiate Call</span>
-                        </button>
                     </div>
-                    <div class="flex p-1 dark:bg-zinc-700 dark:border-zinc-600">
+                    <div class="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-900/50">
                         <div>
-                            <div class='dark:text-white'>My Destination Hash</div>
-                            <div class="text-sm text-gray-700 dark:text-zinc-100">{{ myAudioCallAddressHash || "Unknown" }}</div>
+                            <div class="text-xs font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wide">My Destination Hash</div>
+                            <div class="text-sm text-gray-900 dark:text-zinc-100 font-mono mt-0.5">{{ myAudioCallAddressHash || "Unknown" }}</div>
                         </div>
-                        <div class="ml-auto my-auto mr-1">
-                            <a @click="announce" href="javascript:void(0)" class="rounded-full">
-                                <div class="flex text-gray-700 bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded-full">
-                                    <div>
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M8.288 15.038a5.25 5.25 0 0 1 7.424 0M5.106 11.856c3.807-3.808 9.98-3.808 13.788 0M1.924 8.674c5.565-5.565 14.587-5.565 20.152 0M12.53 18.22l-.53.53-.53-.53a.75.75 0 0 1 1.06 0Z" />
-                                        </svg>
-                                    </div>
-                                    <div class="my-auto mx-1 text-sm">Announce</div>
-                                </div>
-                            </a>
-                        </div>
+                        <button @click="announce" type="button" class="inline-flex items-center gap-x-1.5 rounded-xl bg-gray-600 hover:bg-gray-700 dark:bg-gray-600 dark:hover:bg-gray-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M8.288 15.038a5.25 5.25 0 0 1 7.424 0M5.106 11.856c3.807-3.808 9.98-3.808 13.788 0M1.924 8.674c5.565-5.565 14.587-5.565 20.152 0M12.53 18.22l-.53.53-.53-.53a.75.75 0 0 1 1.06 0Z" />
+                            </svg>
+                            <span>Announce</span>
+                        </button>
                     </div>
                 </div>
 
                 <!-- active calls -->
-                <div v-if="activeAudioCalls.length > 0" class="border rounded-xl bg-white shadow w-full overflow-hidden  dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-100">
-                    <div class="flex border-b border-gray-300 text-gray-700 p-2 dark:text-zinc-100">
+                <div v-if="activeAudioCalls.length > 0" class="border border-gray-200 dark:border-zinc-800 rounded-2xl bg-white dark:bg-zinc-900 shadow-lg w-full overflow-hidden">
+                    <div class="flex items-center border-b border-gray-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm px-4 py-3">
                         <div class="my-auto mr-2">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0ZM3.75 12h.007v.008H3.75V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm-.375 5.25h.007v.008H3.75v-.008Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
                             </svg>
                         </div>
-                        <div class="my-auto">Active Calls</div>
+                        <div class="font-semibold text-gray-900 dark:text-zinc-100">Active Calls</div>
                     </div>
-                    <div class="divide-y">
-                        <div v-for="audioCall in activeAudioCalls" class="flex p-2">
-                            <div class="mr-2 my-auto">
-                                <div class="bg-gray-100 p-2 rounded-full">
+                    <div class="divide-y divide-gray-200 dark:divide-zinc-800">
+                        <div v-for="audioCall in activeAudioCalls" class="flex items-center p-4 hover:bg-gray-50 dark:hover:bg-zinc-900/50 transition-colors">
+                            <div class="mr-3 flex-shrink-0">
+                                <div class="bg-gray-100 dark:bg-zinc-800 p-2.5 rounded-xl">
                                     <svg v-if="audioCall.is_outbound" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5">
                                         <path d="M3.5 2A1.5 1.5 0 0 0 2 3.5V5c0 1.149.15 2.263.43 3.326a13.022 13.022 0 0 0 9.244 9.244c1.063.28 2.177.43 3.326.43h1.5a1.5 1.5 0 0 0 1.5-1.5v-1.148a1.5 1.5 0 0 0-1.175-1.465l-3.223-.716a1.5 1.5 0 0 0-1.767 1.052l-.267.933c-.117.41-.555.643-.95.48a11.542 11.542 0 0 1-6.254-6.254c-.163-.395.07-.833.48-.95l.933-.267a1.5 1.5 0 0 0 1.052-1.767l-.716-3.223A1.5 1.5 0 0 0 4.648 2H3.5ZM16.5 4.56l-3.22 3.22a.75.75 0 1 1-1.06-1.06l3.22-3.22h-2.69a.75.75 0 0 1 0-1.5h4.5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0V4.56Z" />
                                     </svg>
@@ -178,24 +175,24 @@
                                     </svg>
                                 </div>
                             </div>
-                            <div>
-                                <div>{{ audioCall.remote_destination_hash || "Unknown" }}</div>
-                                <div class="text-sm text-gray-500 dark:text-zinc-100">
+                            <div class="flex-1 min-w-0">
+                                <div class="font-medium text-gray-900 dark:text-zinc-100 truncate">{{ audioCall.remote_destination_hash || "Unknown" }}</div>
+                                <div class="text-sm text-gray-500 dark:text-zinc-400">
                                     <span v-if="audioCall.is_outbound">Outgoing Call...</span>
                                     <span v-else>Incoming Call...</span>
                                 </div>
                             </div>
-                            <div class="flex space-x-2 ml-auto my-auto mx-2">
+                            <div class="flex items-center gap-2 ml-auto flex-shrink-0">
 
                                 <!-- rejoin call -->
-                                <button v-if="audioCall.is_active" title="Join Call" @click="joinCall(audioCall.hash)" type="button" class="my-auto inline-flex items-center gap-x-1 rounded-full bg-green-500 p-2 text-sm font-semibold text-white shadow-sm hover:bg-green-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-500">
+                                <button v-if="audioCall.is_active" title="Join Call" @click="joinCall(audioCall.hash)" type="button" class="inline-flex items-center justify-center gap-x-1.5 rounded-xl bg-green-600 hover:bg-green-700 dark:bg-green-600 dark:hover:bg-green-700 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-500">
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5">
                                         <path fill-rule="evenodd" d="M2 3.5A1.5 1.5 0 0 1 3.5 2h1.148a1.5 1.5 0 0 1 1.465 1.175l.716 3.223a1.5 1.5 0 0 1-1.052 1.767l-.933.267c-.41.117-.643.555-.48.95a11.542 11.542 0 0 0 6.254 6.254c.395.163.833-.07.95-.48l.267-.933a1.5 1.5 0 0 1 1.767-1.052l3.223.716A1.5 1.5 0 0 1 18 15.352V16.5a1.5 1.5 0 0 1-1.5 1.5H15c-1.149 0-2.263-.15-3.326-.43A13.022 13.022 0 0 1 2.43 8.326 13.019 13.019 0 0 1 2 5V3.5Z" clip-rule="evenodd" />
                                     </svg>
                                 </button>
 
                                 <!-- hangup call -->
-                                <button v-if="audioCall.is_active" title="Hangup Call" @click="hangupCall(audioCall.hash)" type="button" class="my-auto inline-flex items-center gap-x-1 rounded-full bg-red-500 p-2 text-sm font-semibold text-white shadow-sm hover:bg-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500">
+                                <button v-if="audioCall.is_active" title="Hangup Call" @click="hangupCall(audioCall.hash)" type="button" class="inline-flex items-center justify-center gap-x-1.5 rounded-xl bg-red-600 hover:bg-red-700 dark:bg-red-600 dark:hover:bg-red-700 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500">
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 rotate-[135deg] translate-y-0.5">
                                         <path fill-rule="evenodd" d="M2 3.5A1.5 1.5 0 0 1 3.5 2h1.148a1.5 1.5 0 0 1 1.465 1.175l.716 3.223a1.5 1.5 0 0 1-1.052 1.767l-.933.267c-.41.117-.643.555-.48.95a11.542 11.542 0 0 0 6.254 6.254c.395.163.833-.07.95-.48l.267-.933a1.5 1.5 0 0 1 1.767-1.052l3.223.716A1.5 1.5 0 0 1 18 15.352V16.5a1.5 1.5 0 0 1-1.5 1.5H15c-1.149 0-2.263-.15-3.326-.43A13.022 13.022 0 0 1 2.43 8.326 13.019 13.019 0 0 1 2 5V3.5Z" clip-rule="evenodd" />
                                     </svg>
@@ -207,24 +204,22 @@
                 </div>
 
                 <!-- call history -->
-                <div v-if="inactiveAudioCalls.length > 0" class="border rounded-xl bg-white shadow w-full overflow-hidden dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-100">
-                    <div class="flex border-b border-gray-300 text-gray-700 p-2">
+                <div v-if="inactiveAudioCalls.length > 0" class="border border-gray-200 dark:border-zinc-800 rounded-2xl bg-white dark:bg-zinc-900 shadow-lg w-full overflow-hidden">
+                    <div class="flex items-center justify-between border-b border-gray-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm px-4 py-3">
                         <div class="my-auto mr-2">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0ZM3.75 12h.007v.008H3.75V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm-.375 5.25h.007v.008H3.75v-.008Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
                             </svg>
                         </div>
-                        <div class="my-auto">Call History</div>
-                        <div class="ml-auto">
-                            <button @click="clearCallHistory" type="button" class="my-auto inline-flex items-center gap-x-1 rounded-md bg-gray-500 px-2 py-1 text-sm font-semibold text-white shadow-sm hover:bg-gray-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500">
-                                Clear All
-                            </button>
-                        </div>
+                        <div class="font-semibold text-gray-900 dark:text-zinc-100">Call History</div>
+                        <button @click="clearCallHistory" type="button" class="inline-flex items-center gap-x-1.5 rounded-xl bg-gray-600 hover:bg-gray-700 dark:bg-gray-600 dark:hover:bg-gray-700 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500">
+                            Clear All
+                        </button>
                     </div>
-                    <div class="divide-y">
-                        <div v-for="audioCall in inactiveAudioCalls" class="group flex p-2">
-                            <div class="mr-2 my-auto">
-                                <div class="bg-gray-100 p-2 rounded-full">
+                    <div class="divide-y divide-gray-200 dark:divide-zinc-800">
+                        <div v-for="audioCall in inactiveAudioCalls" class="group flex items-center p-4 hover:bg-gray-50 dark:hover:bg-zinc-900/50 transition-colors">
+                            <div class="mr-3 flex-shrink-0">
+                                <div class="bg-gray-100 dark:bg-zinc-800 p-2.5 rounded-xl">
                                     <svg v-if="audioCall.is_outbound" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5">
                                         <path d="M3.5 2A1.5 1.5 0 0 0 2 3.5V5c0 1.149.15 2.263.43 3.326a13.022 13.022 0 0 0 9.244 9.244c1.063.28 2.177.43 3.326.43h1.5a1.5 1.5 0 0 0 1.5-1.5v-1.148a1.5 1.5 0 0 0-1.175-1.465l-3.223-.716a1.5 1.5 0 0 0-1.767 1.052l-.267.933c-.117.41-.555.643-.95.48a11.542 11.542 0 0 1-6.254-6.254c-.163-.395.07-.833.48-.95l.933-.267a1.5 1.5 0 0 0 1.052-1.767l-.716-3.223A1.5 1.5 0 0 0 4.648 2H3.5ZM16.5 4.56l-3.22 3.22a.75.75 0 1 1-1.06-1.06l3.22-3.22h-2.69a.75.75 0 0 1 0-1.5h4.5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0V4.56Z" />
                                     </svg>
@@ -233,14 +228,14 @@
                                     </svg>
                                 </div>
                             </div>
-                            <div>
-                                <div>Destination: {{ audioCall.remote_destination_hash || "Unknown" }}</div>
-                                <div class="text-sm text-gray-500">Call Hash: {{ audioCall.hash }}</div>
+                            <div class="flex-1 min-w-0">
+                                <div class="font-medium text-gray-900 dark:text-zinc-100 truncate">{{ audioCall.remote_destination_hash || "Unknown" }}</div>
+                                <div class="text-sm text-gray-500 dark:text-zinc-400 font-mono">Call Hash: {{ audioCall.hash }}</div>
                             </div>
-                            <div class="hidden group-hover:flex space-x-2 ml-auto my-auto mx-2">
+                            <div class="hidden group-hover:flex items-center gap-2 ml-auto flex-shrink-0">
 
                                 <!-- delete call -->
-                                <button @click="deleteCall(audioCall.hash)" type="button" class="my-auto inline-flex items-center gap-x-1 rounded-full bg-gray-100 p-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500">
+                                <button @click="deleteCall(audioCall.hash)" type="button" class="inline-flex items-center justify-center gap-x-1.5 rounded-xl bg-gray-100 dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-700 px-3 py-2 text-sm font-semibold text-gray-700 dark:text-zinc-300 shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500">
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5">
                                         <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
                                     </svg>

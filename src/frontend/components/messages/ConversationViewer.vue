@@ -8,11 +8,11 @@
 
             <!-- peer icon -->
             <div class="flex-shrink-0 mr-3">
-                <div v-if="selectedPeer.lxmf_user_icon" class="p-2.5 rounded-xl shadow-sm" :style="{ 'color': selectedPeer.lxmf_user_icon.foreground_colour, 'background-color': selectedPeer.lxmf_user_icon.background_colour }">
-                    <MaterialDesignIcon :icon-name="selectedPeer.lxmf_user_icon.icon_name" class="w-5 h-5"/>
+                <div v-if="selectedPeer.lxmf_user_icon" class="p-2 rounded shadow-sm" :style="{ 'color': selectedPeer.lxmf_user_icon.foreground_colour, 'background-color': selectedPeer.lxmf_user_icon.background_colour }">
+                    <MaterialDesignIcon :icon-name="selectedPeer.lxmf_user_icon.icon_name" class="w-6 h-6"/>
                 </div>
-                <div v-else class="bg-gradient-to-br from-gray-100 to-gray-200 dark:from-zinc-800 dark:to-zinc-700 text-gray-600 dark:text-gray-300 p-2.5 rounded-xl shadow-sm">
-                    <MaterialDesignIcon icon-name="account-outline" class="w-5 h-5"/>
+                <div v-else class="bg-gray-200 dark:bg-zinc-700 text-gray-500 dark:text-gray-400 p-2 rounded shadow-sm">
+                    <MaterialDesignIcon icon-name="account-outline" class="w-6 h-6"/>
                 </div>
             </div>
 
@@ -364,93 +364,52 @@
     </div>
 
     <!-- no peer selected -->
-    <div v-else class="flex flex-col h-full">
-        <div class="flex-1 flex flex-col items-center justify-center text-center px-4">
-            <div class="mb-4">
-                <div class="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/30 dark:to-blue-800/30 flex items-center justify-center">
+    <div v-else class="flex flex-col h-full items-center justify-center">
+        <div class="w-full max-w-md px-4">
+            <div class="mb-6 text-center">
+                <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/30 dark:to-blue-800/30 flex items-center justify-center">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-8 h-8 text-blue-600 dark:text-blue-400">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 0 1-.825-.242m9.345-8.334a2.126 2.126 0 0 0-.476-.095 48.64 48.64 0 0 0-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0 0 11.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155" />
                     </svg>
                 </div>
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-zinc-100 mb-1">No Active Chat</h3>
+                <p class="text-sm text-gray-500 dark:text-zinc-400">Select a peer from the sidebar or enter an address below</p>
             </div>
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-zinc-100 mb-1">No Active Chat</h3>
-            <p class="text-sm text-gray-500 dark:text-zinc-400 mb-6">Select a peer from the sidebar or compose a new message below</p>
-        </div>
-        
-        <!-- compose message input -->
-        <div class="w-full border-t border-gray-200/60 dark:border-zinc-800/60 bg-white/80 dark:bg-zinc-900/50 backdrop-blur-sm px-3 sm:px-4 py-2.5">
+            
+            <!-- compose message input -->
             <div class="w-full">
-                <div class="space-y-2">
-                    <div v-if="newMessageImage" class="attachment-card">
-                        <div class="attachment-card__preview" @click.stop="openImage(newMessageImageUrl)">
-                            <img v-if="newMessageImageUrl" :src="newMessageImageUrl" class="w-full h-full object-cover rounded-lg"/>
-                        </div>
-                        <div class="attachment-card__body">
-                            <div class="attachment-card__title">Image Attachment</div>
-                            <div class="attachment-card__meta">{{ formatBytes(newMessageImage.size) }}</div>
-                        </div>
-                        <button @click.stop="removeImageAttachment" type="button" class="attachment-card__remove">
-                            <MaterialDesignIcon icon-name="close" class="w-4 h-4"/>
-                        </button>
-                    </div>
-                    <div v-if="newMessageAudio" class="attachment-card">
-                        <div class="attachment-card__body w-full">
-                            <div class="attachment-card__title">Voice Note</div>
-                            <div class="attachment-card__meta">{{ formatBytes(newMessageAudio.audio_blob.size) }}</div>
-                            <audio controls class="w-full mt-2 rounded-lg shadow-sm audio-controls-dark" style="height:54px;">
-                                <source :src="newMessageAudio.audio_preview_url" type="audio/wav"/>
-                            </audio>
-                        </div>
-                        <button @click="removeAudioAttachment" type="button" class="attachment-card__remove">
-                            <MaterialDesignIcon icon-name="delete" class="w-4 h-4"/>
-                        </button>
-                    </div>
-                    <div v-if="newMessageFiles.length > 0" class="flex flex-wrap gap-2">
-                        <div v-for="file in newMessageFiles" :key="file.name + file.size" class="attachment-chip">
-                            <div class="flex items-center gap-2">
-                                <MaterialDesignIcon icon-name="paperclip" class="w-4 h-4 text-gray-500 dark:text-gray-300"/>
-                                <div class="text-sm text-gray-800 dark:text-gray-200 truncate max-w-[160px]">{{ file.name }}</div>
-                                <span class="text-xs text-gray-500 dark:text-gray-400">{{ formatBytes(file.size) }}</span>
-                            </div>
-                            <button @click="removeFileAttachment(file)" type="button" class="attachment-chip__remove">
-                                <MaterialDesignIcon icon-name="close" class="w-3.5 h-3.5"/>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                <div class="flex items-end gap-2 mt-2">
-                    <textarea
-                        ref="compose-input"
-                        id="compose-input"
-                        :readonly="isSendingMessage"
-                        v-model="composeAddress"
-                        @keydown.enter.exact.prevent="onComposeEnterPressed"
-                        class="flex-1 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 text-gray-900 dark:text-zinc-100 text-sm rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 px-3 sm:px-4 py-2 resize-none shadow-sm transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500"
-                        rows="1"
-                        placeholder="Enter LXMF address to compose..."></textarea>
-                    <button @click="onComposeSubmit" type="button" :disabled="!composeAddress || composeAddress.trim() === ''"
-                            class="inline-flex items-center justify-center rounded-xl bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700 disabled:bg-gray-400 dark:disabled:bg-zinc-500 disabled:cursor-not-allowed px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                        </svg>
-                    </button>
-                </div>
-                <div class="flex flex-wrap gap-2 items-center mt-2">
-                    <button @click="addFilesToMessage" type="button" class="attachment-action-button">
-                        <MaterialDesignIcon icon-name="paperclip-plus" class="w-4 h-4"/>
-                        <span>Add Files</span>
-                    </button>
-                    <AddImageButton @add-image="onImageSelected"/>
-                    <AddAudioButton
-                        :is-recording-audio-attachment="isRecordingAudioAttachment"
-                        @start-recording="startRecordingAudioAttachment($event)"
-                        @stop-recording="stopRecordingAudioAttachment">
-                        <span>Recording: {{ audioAttachmentRecordingDuration }}</span>
-                    </AddAudioButton>
-                </div>
+                <input
+                    ref="compose-input"
+                    id="compose-input"
+                    :readonly="isSendingMessage"
+                    v-model="composeAddress"
+                    @keydown.enter.exact.prevent="onComposeEnterPressed"
+                    type="text"
+                    class="w-full bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 text-gray-900 dark:text-zinc-100 text-sm rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 px-4 py-2.5 shadow-sm transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500"
+                    placeholder="Enter LXMF address..."/>
             </div>
         </div>
     </div>
+
+    <!-- image modal -->
+    <Transition
+        enter-active-class="transition ease-out duration-200"
+        enter-from-class="opacity-0"
+        enter-to-class="opacity-100"
+        leave-active-class="transition ease-in duration-150"
+        leave-from-class="opacity-100"
+        leave-to-class="opacity-0">
+        <div v-if="imageModalUrl" @click="closeImageModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 dark:bg-black/90 backdrop-blur-sm p-4">
+            <div @click.stop class="relative max-w-7xl max-h-full">
+                <button @click="closeImageModal" type="button" class="absolute -top-12 right-0 inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white/10 dark:bg-zinc-900/10 hover:bg-white/20 dark:hover:bg-zinc-900/20 text-white transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5">
+                        <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+                    </svg>
+                </button>
+                <img :src="imageModalUrl" class="max-w-full max-h-[90vh] rounded-xl shadow-2xl" alt="Image preview"/>
+            </div>
+        </div>
+    </Transition>
 
 </template>
 
@@ -515,6 +474,7 @@ export default {
             audioAttachmentRecordingTimer: null,
             lxmfMessageAudioAttachmentCache: {},
             expandedMessageInfo: null,
+            imageModalUrl: null,
             lxmfAudioModeToCodec2ModeMap: {
                 // https://github.com/markqvist/LXMF/blob/master/LXMF/LXMF.py#L21
                 0x01: "450PWB", // AM_CODEC2_450PWB
@@ -958,16 +918,10 @@ export default {
             }
         },
         openImage: async function(url) {
-
-            // convert data uri to blob
-            const blob = await (await fetch(url)).blob();
-
-            // create blob url
-            const fileUrl = window.URL.createObjectURL(blob);
-
-            // open new tab
-            window.open(fileUrl);
-
+            this.imageModalUrl = url;
+        },
+        closeImageModal() {
+            this.imageModalUrl = null;
         },
         downloadFileFromBase64: async function(fileName, fileBytesBase64) {
 
@@ -1709,7 +1663,11 @@ export default {
 
 <style scoped>
 .attachment-card {
-    @apply relative flex gap-3 border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-2xl p-3 shadow-sm;
+    @apply relative flex gap-3 border border-gray-200 dark:border-zinc-800 rounded-2xl p-3 shadow-sm;
+    background-color: white;
+}
+.dark .attachment-card {
+    background-color: rgb(24 24 27);
 }
 .attachment-card__preview {
     @apply w-24 h-24 overflow-hidden rounded-xl bg-gray-100 dark:bg-zinc-800 cursor-pointer;
@@ -1727,7 +1685,11 @@ export default {
     @apply absolute top-2 right-2 inline-flex items-center justify-center w-6 h-6 rounded-full bg-gray-200 dark:bg-zinc-800 text-gray-600 dark:text-gray-200 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/40;
 }
 .attachment-chip {
-    @apply flex items-center justify-between gap-2 border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-full px-3 py-1 text-xs shadow-sm;
+    @apply flex items-center justify-between gap-2 border border-gray-200 dark:border-zinc-800 rounded-full px-3 py-1 text-xs shadow-sm;
+    background-color: white;
+}
+.dark .attachment-chip {
+    background-color: rgb(24 24 27);
 }
 .attachment-chip__remove {
     @apply inline-flex items-center justify-center text-gray-500 dark:text-gray-300 hover:text-red-500;

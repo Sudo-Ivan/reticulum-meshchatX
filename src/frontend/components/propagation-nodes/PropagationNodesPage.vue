@@ -1,43 +1,78 @@
 <template>
-    <div class="flex flex-col flex-1 overflow-hidden min-w-full sm:min-w-[500px] dark:bg-zinc-950">
+    <div class="flex flex-col flex-1 overflow-hidden min-w-full sm:min-w-[500px] bg-gray-50 dark:bg-zinc-950">
 
-        <!-- search -->
-        <div v-if="propagationNodes.length > 0" class="flex bg-white dark:bg-zinc-800 p-1 border-b border-gray-300 dark:border-zinc-700">
-            <input v-model="searchTerm" type="text" :placeholder="`Search ${propagationNodes.length} Propagation Nodes...`" class="w-full bg-gray-50 dark:bg-zinc-700 border border-gray-300 dark:border-zinc-600 text-gray-900 dark:text-gray-100 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 dark:focus:ring-blue-600 dark:focus:border-blue-600 block w-full p-2.5">
+        <!-- search and sort -->
+        <div v-if="propagationNodes.length > 0" class="flex flex-col sm:flex-row gap-2 bg-white dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 px-4 py-3">
+            <input v-model="searchTerm" type="text" :placeholder="`Search ${propagationNodes.length} Propagation Nodes...`" class="flex-1 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 text-gray-900 dark:text-zinc-100 text-sm rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 px-4 py-2 shadow-sm transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500">
+            <select v-model="sortBy" class="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 text-gray-900 dark:text-zinc-100 text-sm rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 px-4 py-2 shadow-sm transition-all min-w-[180px]">
+                <option value="name">Sort by Name</option>
+                <option value="name-desc">Sort by Name (Z-A)</option>
+                <option value="recent">Sort by Recent</option>
+                <option value="oldest">Sort by Oldest</option>
+                <option value="preferred">Preferred First</option>
+            </select>
         </div>
 
         <!-- propagation nodes -->
-        <div class="h-full overflow-y-auto">
-            <div v-if="searchedPropagationNodes.length > 0" class="p-2 space-y-2 w-full">
-                <div v-for="propagationNode of searchedPropagationNodes" class="border dark:border-zinc-700 rounded bg-white dark:bg-zinc-800 shadow">
-                    <div class="p-1 flex">
-                        <div class="my-auto">
-                            <div class="font-semibold text-gray-900 dark:text-gray-100">{{ propagationNode.operator_display_name ?? "Unknown Operator" }}</div>
-                            <div class="text-sm text-gray-700 dark:text-gray-300"><{{ propagationNode.destination_hash }}></div>
+        <div class="h-full overflow-y-auto px-4 py-4">
+            <div v-if="paginatedNodes.length > 0" class="space-y-3 w-full">
+                <div v-for="propagationNode of paginatedNodes" :key="propagationNode.destination_hash" class="border border-gray-200 dark:border-zinc-800 rounded-2xl bg-white dark:bg-zinc-900 shadow-sm hover:shadow-md transition-shadow overflow-hidden" :class="{ 'ring-2 ring-blue-500 dark:ring-blue-400': config.lxmf_preferred_propagation_node_destination_hash === propagationNode.destination_hash }">
+                    <div class="p-4 flex items-center gap-3">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 mb-1">
+                                <div class="font-semibold text-gray-900 dark:text-zinc-100 truncate">{{ propagationNode.operator_display_name ?? "Unknown Operator" }}</div>
+                                <span v-if="config.lxmf_preferred_propagation_node_destination_hash === propagationNode.destination_hash" class="inline-flex items-center gap-1 rounded-full bg-blue-100 dark:bg-blue-900/30 px-2 py-0.5 text-xs font-semibold text-blue-700 dark:text-blue-300">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.857-9.809a.75.75 0 0 0-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z" clip-rule="evenodd" />
+                                    </svg>
+                                    Preferred
+                                </span>
+                                <span v-if="propagationNode.is_propagation_enabled === false" class="inline-flex items-center gap-1 rounded-full bg-red-100 dark:bg-red-900/30 px-2 py-0.5 text-xs font-semibold text-red-700 dark:text-red-300">
+                                    Disabled
+                                </span>
+                            </div>
+                            <div class="text-sm text-gray-600 dark:text-zinc-400 font-mono truncate"><{{ propagationNode.destination_hash }}></div>
+                            <div class="text-xs text-gray-500 dark:text-zinc-500 mt-1">Announced {{ formatTimeAgo(propagationNode.updated_at) }}</div>
                         </div>
-                        <div class="ml-auto my-auto">
-                            <button v-if="config.lxmf_preferred_propagation_node_destination_hash === propagationNode.destination_hash" @click="stopUsingPropagationNode" type="button" class="my-auto inline-flex items-center gap-x-1 rounded-md bg-red-500 dark:bg-red-600 px-2 py-1 text-sm font-semibold text-white shadow-sm hover:bg-red-400 dark:hover:bg-red-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500 dark:focus-visible:outline-red-600">
-                                Stop Using Node
+                        <div class="flex-shrink-0">
+                            <button v-if="config.lxmf_preferred_propagation_node_destination_hash === propagationNode.destination_hash" @click="stopUsingPropagationNode" type="button" class="inline-flex items-center gap-x-1.5 rounded-xl bg-red-600 hover:bg-red-700 dark:bg-red-600 dark:hover:bg-red-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500">
+                                Stop Using
                             </button>
-                            <button v-else @click="usePropagationNode(propagationNode.destination_hash)" type="button" class="my-auto inline-flex items-center gap-x-1 rounded-md bg-gray-500 dark:bg-zinc-600 px-2 py-1 text-sm font-semibold text-white shadow-sm hover:bg-gray-400 dark:hover:bg-zinc-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 dark:focus-visible:outline-zinc-600">
+                            <button v-else @click="usePropagationNode(propagationNode.destination_hash)" type="button" class="inline-flex items-center gap-x-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500">
                                 Set as Preferred
                             </button>
                         </div>
                     </div>
-                    <div class="bg-gray-50 dark:bg-zinc-900 p-1">
-                        <div class="text-gray-500 dark:text-gray-400 text-sm">
-                            <span>Announced {{ formatTimeAgo(propagationNode.updated_at) }}</span>
-                            <span v-if="propagationNode.is_propagation_enabled === false">
-                                <span> • <span class="text-red-500 dark:text-red-400">Disabled by Operator</span></span>
-                            </span>
-                            <span v-if="config.lxmf_preferred_propagation_node_destination_hash === propagationNode.destination_hash">
-                                <span> • <span class="text-green-500 dark:text-green-400">Preferred</span></span>
-                            </span>
-                        </div>
-                    </div>
                 </div>
             </div>
-            <div v-else class="flex h-full">
+            
+            <!-- pagination -->
+            <div v-if="totalPages > 1" class="flex items-center justify-between mt-6 pt-4 border-t border-gray-200 dark:border-zinc-800">
+                <div class="text-sm text-gray-600 dark:text-zinc-400">
+                    Showing {{ startIndex + 1 }}-{{ endIndex }} of {{ sortedAndSearchedPropagationNodes.length }}
+                </div>
+                <div class="flex items-center gap-2">
+                    <button @click="currentPage = Math.max(1, currentPage - 1)" :disabled="currentPage === 1" type="button" class="inline-flex items-center gap-x-1.5 rounded-xl bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-2 text-sm font-medium text-gray-700 dark:text-zinc-300 shadow-sm transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+                        </svg>
+                        Previous
+                    </button>
+                    <div class="flex items-center gap-1">
+                        <button v-for="page in visiblePages" :key="page" @click="currentPage = page" type="button" :class="[ page === currentPage ? 'bg-blue-600 text-white dark:bg-blue-600' : 'bg-white dark:bg-zinc-900 text-gray-700 dark:text-zinc-300 hover:bg-gray-50 dark:hover:bg-zinc-800' ]" class="w-10 h-10 rounded-xl border border-gray-200 dark:border-zinc-800 text-sm font-medium shadow-sm transition-colors">
+                            {{ page }}
+                        </button>
+                    </div>
+                    <button @click="currentPage = Math.min(totalPages, currentPage + 1)" :disabled="currentPage === totalPages" type="button" class="inline-flex items-center gap-x-1.5 rounded-xl bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-2 text-sm font-medium text-gray-700 dark:text-zinc-300 shadow-sm transition-colors">
+                        Next
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            
+            <div v-else-if="sortedAndSearchedPropagationNodes.length === 0" class="flex h-full">
                 <div class="mx-auto my-auto text-center leading-5 text-gray-900 dark:text-gray-100">
 
                     <!-- no propagation nodes at all -->
@@ -49,8 +84,8 @@
                         </div>
                         <div class="font-semibold">No Propagation Nodes</div>
                         <div>Check back later, once someone has announced.</div>
-                        <div class="mt-2">
-                            <button @click="loadPropagationNodes" type="button" class="my-auto inline-flex items-center gap-x-1 rounded-md bg-gray-500 dark:bg-zinc-600 px-2 py-1 text-sm font-semibold text-white shadow-sm hover:bg-gray-400 dark:hover:bg-zinc-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 dark:focus-visible:outline-zinc-600">
+                        <div class="mt-4">
+                            <button @click="loadPropagationNodes" type="button" class="inline-flex items-center gap-x-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500">
                                 Reload
                             </button>
                         </div>
@@ -83,10 +118,13 @@ export default {
     data() {
         return {
             searchTerm: "",
+            sortBy: "preferred",
             propagationNodes: [],
             config: {
                 lxmf_preferred_propagation_node_destination_hash: null,
             },
+            currentPage: 1,
+            itemsPerPage: 20,
         };
     },
     beforeUnmount() {
@@ -158,6 +196,14 @@ export default {
             return Utils.formatTimeAgo(datetimeString);
         },
     },
+    watch: {
+        searchTerm() {
+            this.currentPage = 1;
+        },
+        sortBy() {
+            this.currentPage = 1;
+        },
+    },
     computed: {
         searchedPropagationNodes() {
             return this.propagationNodes.filter((propagationNode) => {
@@ -166,6 +212,79 @@ export default {
                 const matchesDestinationHash = propagationNode.destination_hash.toLowerCase().includes(search);
                 return matchesOperatorDisplayName || matchesDestinationHash;
             });
+        },
+        sortedAndSearchedPropagationNodes() {
+            let nodes = [...this.searchedPropagationNodes];
+            
+            switch(this.sortBy) {
+                case "name":
+                    nodes.sort((a, b) => {
+                        const nameA = (a.operator_display_name ?? "Unknown Operator").toLowerCase();
+                        const nameB = (b.operator_display_name ?? "Unknown Operator").toLowerCase();
+                        return nameA.localeCompare(nameB);
+                    });
+                    break;
+                case "name-desc":
+                    nodes.sort((a, b) => {
+                        const nameA = (a.operator_display_name ?? "Unknown Operator").toLowerCase();
+                        const nameB = (b.operator_display_name ?? "Unknown Operator").toLowerCase();
+                        return nameB.localeCompare(nameA);
+                    });
+                    break;
+                case "recent":
+                    nodes.sort((a, b) => {
+                        const timeA = new Date(a.updated_at).getTime();
+                        const timeB = new Date(b.updated_at).getTime();
+                        return timeB - timeA;
+                    });
+                    break;
+                case "oldest":
+                    nodes.sort((a, b) => {
+                        const timeA = new Date(a.updated_at).getTime();
+                        const timeB = new Date(b.updated_at).getTime();
+                        return timeA - timeB;
+                    });
+                    break;
+                case "preferred":
+                default:
+                    nodes.sort((a, b) => {
+                        const aIsPreferred = this.config.lxmf_preferred_propagation_node_destination_hash === a.destination_hash;
+                        const bIsPreferred = this.config.lxmf_preferred_propagation_node_destination_hash === b.destination_hash;
+                        if(aIsPreferred && !bIsPreferred) return -1;
+                        if(!aIsPreferred && bIsPreferred) return 1;
+                        const timeA = new Date(a.updated_at).getTime();
+                        const timeB = new Date(b.updated_at).getTime();
+                        return timeB - timeA;
+                    });
+                    break;
+            }
+            
+            return nodes;
+        },
+        totalPages() {
+            return Math.ceil(this.sortedAndSearchedPropagationNodes.length / this.itemsPerPage);
+        },
+        startIndex() {
+            return (this.currentPage - 1) * this.itemsPerPage;
+        },
+        endIndex() {
+            return Math.min(this.startIndex + this.itemsPerPage, this.sortedAndSearchedPropagationNodes.length);
+        },
+        paginatedNodes() {
+            return this.sortedAndSearchedPropagationNodes.slice(this.startIndex, this.endIndex);
+        },
+        visiblePages() {
+            const pages = [];
+            const maxVisible = 5;
+            let start = Math.max(1, this.currentPage - Math.floor(maxVisible / 2));
+            let end = Math.min(this.totalPages, start + maxVisible - 1);
+            if(end - start < maxVisible - 1) {
+                start = Math.max(1, end - maxVisible + 1);
+            }
+            for(let i = start; i <= end; i++) {
+                pages.push(i);
+            }
+            return pages;
         },
     },
 }
