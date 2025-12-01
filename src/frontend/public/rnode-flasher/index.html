@@ -22,40 +22,40 @@
     <script src="./js/crypto-js@3.9.1-1/md5.js"></script>
 
 </head>
-<body class="bg-slate-300">
+<body class="bg-gray-50 dark:bg-zinc-950 min-h-screen">
 
-<div id="app" class="space-y-2 p-3">
+<div id="app" class="max-w-7xl mx-auto space-y-4 p-4 sm:p-6">
 
     <!-- header -->
-    <div class="flex border bg-gray-50 p-3 rounded shadow">
-        <div class="mr-3">
+    <div class="flex items-center gap-3 border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-2xl shadow-lg p-4">
+        <div>
             <img src="reticulum_logo_512.png" class="w-14 h-14"/>
         </div>
-        <div class="my-auto">
-            <div class="font-bold">RNode Flasher</div>
-            <div class="text-sm">Developed by <a target="_blank" href="https://liamcottle.com" class="text-blue-500 hover:underline">Liam Cottle</a></div>
+        <div class="flex-1">
+            <div class="font-semibold text-lg text-gray-900 dark:text-zinc-100">RNode Flasher</div>
+            <div class="text-sm text-gray-600 dark:text-zinc-400">Developed by <a target="_blank" href="https://liamcottle.com" class="text-blue-600 dark:text-blue-400 hover:underline">Liam Cottle</a></div>
         </div>
     </div>
 
-    <div class="border bg-gray-50 rounded shadow">
+    <div class="border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-2xl shadow-lg overflow-hidden">
 
-        <div class="border-b px-2 py-1">
-            1. Select your device
+        <div class="border-b border-gray-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/50 backdrop-blur-sm px-4 py-3">
+            <div class="font-semibold text-gray-900 dark:text-zinc-100">1. Select your device</div>
         </div>
 
-        <div class="p-3">
+        <div class="p-4 space-y-3">
 
-            <div class="flex mb-1 space-x-1">
-                <div class="min-w-[70px] my-auto text-right">Product</div>
-                <select v-model="selectedProduct" class="w-full sm:w-min sm:min-w-[250px] bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block pl-2 pr-8">
+            <div class="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+                <label class="min-w-[80px] text-sm font-medium text-gray-700 dark:text-zinc-300">Product</label>
+                <select v-model="selectedProduct" class="flex-1 sm:flex-none sm:min-w-[280px] bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 text-gray-900 dark:text-zinc-100 text-sm rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 px-4 py-2 shadow-sm transition-all">
                     <option :value="null" disabled>Select a Product</option>
                     <option v-for="product of products" :value="product">{{ product.name }}</option>
                 </select>
             </div>
 
-            <div class="flex space-x-1">
-                <div class="min-w-[70px] my-auto text-right">Model</div>
-                <select v-model="selectedModel" class="w-full sm:w-min sm:min-w-[250px] bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block pl-2 pr-8">
+            <div class="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+                <label class="min-w-[80px] text-sm font-medium text-gray-700 dark:text-zinc-300">Model</label>
+                <select v-model="selectedModel" :disabled="!selectedProduct" class="flex-1 sm:flex-none sm:min-w-[280px] bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 text-gray-900 dark:text-zinc-100 text-sm rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 px-4 py-2 shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed">
                     <option :value="null" disabled>Select a Model</option>
                     <option v-if="selectedProduct" v-for="model of selectedProduct.models" :value="model">{{ model.name }}</option>
                 </select>
@@ -64,194 +64,242 @@
         </div>
 
         <!-- button to enter dfu mode on PLATFORM_NRF52 -->
-        <div v-if="selectedProduct?.platform === 0x70" class="p-3 border-t">
-            <button @click="enterDfuMode" class="border border-gray-500 px-2 bg-gray-100 hover:bg-gray-200 rounded">
-                Enter DFU Mode
+        <div v-if="selectedProduct?.platform === 0x70" class="px-4 pb-4 border-t border-gray-200 dark:border-zinc-800 pt-4">
+            <button @click="enterDfuMode" :disabled="isEnteringDfuMode" class="inline-flex items-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                <svg v-if="isEnteringDfuMode" class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span v-if="isEnteringDfuMode">Entering DFU Mode...</span>
+                <span v-else>Enter DFU Mode</span>
             </button>
         </div>
 
-        <div class="border-t px-2 py-1">
-            <div class="text-sm space-x-1">
+        <div class="border-t border-gray-200 dark:border-zinc-800 px-4 py-3 bg-gray-50 dark:bg-zinc-900/50">
+            <div class="text-sm text-gray-600 dark:text-zinc-400">
                 <span>Can't find your device? Open an issue on</span>
-                <a target="_blank" href="https://github.com/liamcottle/rnode-flasher" class="text-blue-500 hover:underline">GitHub</a>
+                <a target="_blank" href="https://github.com/liamcottle/rnode-flasher" class="text-blue-600 dark:text-blue-400 hover:underline">GitHub</a>
             </div>
         </div>
 
     </div>
 
-    <div class="border bg-gray-50 rounded shadow">
+    <!-- step 2: Flash firmware (full width) -->
+    <div class="border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-2xl shadow-lg overflow-hidden">
 
-        <div class="border-b px-2 py-1">
-            2. Select firmware to flash (.zip)
+        <div class="border-b border-gray-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/50 backdrop-blur-sm px-4 py-3">
+            <div class="font-semibold text-gray-900 dark:text-zinc-100">2. Select firmware to flash (.zip)</div>
         </div>
 
-        <div class="p-3">
+        <div class="p-4 space-y-4">
 
-            <div class="mb-2">
-                <input ref="file" type="file"/>
+            <div>
+                <input ref="file" type="file" accept=".zip" class="block w-full text-sm text-gray-900 dark:text-zinc-100 border border-gray-200 dark:border-zinc-800 rounded-xl cursor-pointer bg-white dark:bg-zinc-900 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 file:mr-4 file:py-2 file:px-4 file:rounded-l-xl file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 dark:file:bg-blue-600 dark:hover:file:bg-blue-700"/>
             </div>
 
-            <div v-if="!isFlashing" class="space-x-1">
-                <button @click="flash" :disabled="isFlashing" class="border border-gray-500 px-2 bg-gray-100 hover:bg-gray-200 rounded">
+            <div v-if="flashError" class="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-3">
+                <div class="flex items-start gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM8.28 7.22a.75.75 0 0 0-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 1 0 1.06 1.06L10 11.06l1.72 1.72a.75.75 0 1 0 1.06-1.06L11.06 10l1.72-1.72a.75.75 0 0 0-1.06-1.06L10 8.94 8.28 7.22Z" clip-rule="evenodd" />
+                    </svg>
+                    <div class="flex-1">
+                        <div class="text-sm font-semibold text-red-800 dark:text-red-300">Flash Failed</div>
+                        <div class="text-sm text-red-700 dark:text-red-400 mt-1">{{ flashError }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div v-if="!isFlashing">
+                <button @click="flash" :disabled="!selectedProduct || !selectedModel || !$refs.file?.files[0]" class="inline-flex items-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+                    </svg>
                     Flash Now
                 </button>
             </div>
 
-            <div v-else>
-                <span v-if="flashingProgress > 0">Flashing: {{flashingProgress}}%</span>
-                <span v-else>Flashing: please wait...</span>
-                <div class="mt-1 w-[200px] overflow-hidden rounded-full bg-gray-200">
-                    <div class="h-2 rounded-full bg-blue-600" :style="{ 'width': `${flashingProgress}%`}"></div>
+            <div v-else class="space-y-2">
+                <div class="flex items-center justify-between">
+                    <span class="text-sm font-medium text-gray-900 dark:text-zinc-100">
+                        <span v-if="flashingProgress > 0">Flashing: {{flashingProgress}}%</span>
+                        <span v-else>Connecting to device...</span>
+                    </span>
+                    <span class="text-xs text-gray-500 dark:text-zinc-400">{{ flashingStatus }}</span>
+                </div>
+                <div class="w-full overflow-hidden rounded-full bg-gray-200 dark:bg-zinc-800 h-2.5">
+                    <div class="h-full rounded-full bg-blue-600 transition-all duration-300" :style="{ 'width': `${flashingProgress}%`}"></div>
                 </div>
             </div>
 
         </div>
 
-        <div class="border-t px-2 py-1 text-sm">
-            <div>
-                <span>Download Firmware</span>
-                <span v-if="selectedProduct && selectedModel && recommendedFirmwareFilename">: <a target="_blank" :href="`https://github.com/markqvist/RNode_Firmware/releases/latest/download/${recommendedFirmwareFilename}`" class="text-blue-500 hover:underline">{{ recommendedFirmwareFilename }}</a></span>
+        <div class="border-t border-gray-200 dark:border-zinc-800 px-4 py-3 bg-gray-50 dark:bg-zinc-900/50 space-y-2">
+            <div class="text-sm text-gray-900 dark:text-zinc-100">
+                <span class="font-medium">Download Firmware</span>
+                <span v-if="selectedProduct && selectedModel && recommendedFirmwareFilename">: <a target="_blank" :href="`https://github.com/markqvist/RNode_Firmware/releases/latest/download/${recommendedFirmwareFilename}`" class="text-blue-600 dark:text-blue-400 hover:underline font-medium">{{ recommendedFirmwareFilename }}</a></span>
             </div>
-            <div class="space-x-1">
-                <a target="_blank" href="https://github.com/markqvist/RNode_Firmware/releases" class="text-blue-500 hover:underline">Official Firmware</a>
-                <span>•</span>
-                <a target="_blank" href="https://github.com/liberatedsystems/RNode_Firmware_CE/releases" class="text-blue-500 hover:underline">CE Firmware</a>
-                <span>•</span>
-                <a target="_blank" href="https://github.com/attermann/microReticulum_Firmware/releases" class="text-blue-500 hover:underline">Transport Node Firmware</a>
+            <div class="flex flex-wrap gap-2 text-sm">
+                <a target="_blank" href="https://github.com/markqvist/RNode_Firmware/releases" class="text-blue-600 dark:text-blue-400 hover:underline">Official Firmware</a>
+                <span class="text-gray-400 dark:text-zinc-600">•</span>
+                <a target="_blank" href="https://github.com/liberatedsystems/RNode_Firmware_CE/releases" class="text-blue-600 dark:text-blue-400 hover:underline">CE Firmware</a>
+                <span class="text-gray-400 dark:text-zinc-600">•</span>
+                <a target="_blank" href="https://github.com/attermann/microReticulum_Firmware/releases" class="text-blue-600 dark:text-blue-400 hover:underline">Transport Node Firmware</a>
             </div>
         </div>
 
-        <div class="border-t px-2 py-1 text-sm">
-            <div>Common error messages</div>
-            <div>• Hardware Failure: You need to provision the eeprom in step 3.</div>
-            <div>• Firmware Corrupt: You need to set the firmware hash in step 4.</div>
+        <div class="border-t border-gray-200 dark:border-zinc-800 px-4 py-3 bg-amber-50 dark:bg-amber-900/10">
+            <div class="text-sm font-semibold text-amber-900 dark:text-amber-300 mb-1">Common Issues</div>
+            <div class="text-sm text-amber-800 dark:text-amber-400 space-y-0.5">
+                <div>• <strong>Hardware Failure:</strong> You need to provision the eeprom in step 3.</div>
+                <div>• <strong>Firmware Corrupt:</strong> You need to set the firmware hash in step 4.</div>
+            </div>
         </div>
 
     </div>
 
-    <div class="border bg-gray-50 rounded shadow">
+    <!-- main workflow steps in grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        
+        <!-- left column: steps 1-3 -->
+        <div class="space-y-4">
+            <!-- step 3: Provision EEPROM -->
+            <div class="border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-2xl shadow-lg overflow-hidden">
 
-        <div class="border-b px-2 py-1">
-            3. Provision EEPROM (sets device info, checksum and blank signature)
-        </div>
+            <div class="border-b border-gray-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/50 backdrop-blur-sm px-4 py-3">
+                <div class="font-semibold text-gray-900 dark:text-zinc-100">3. Provision EEPROM</div>
+                <div class="text-xs text-gray-600 dark:text-zinc-400 mt-0.5">Sets device info, checksum and blank signature</div>
+            </div>
 
-        <div class="p-3">
-            <button v-if="!isProvisioning" @click="provision" class="border border-gray-500 px-2 bg-gray-100 hover:bg-gray-200 rounded">
-                Provision
-            </button>
-            <div v-else class="flex items-center space-x-1">
-                <div class="mr-1">
-                    <svg class="animate-spin h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <div class="p-4">
+                <button v-if="!isProvisioning" @click="provision" :disabled="!selectedProduct || !selectedModel" class="inline-flex items-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                    Provision
+                </button>
+                <div v-else class="flex items-center gap-2 text-sm text-gray-700 dark:text-zinc-300">
+                    <svg class="animate-spin h-5 w-5 text-blue-600 dark:text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
+                    <span>Provisioning: please wait...</span>
                 </div>
-                <div>Provisioning: please wait...</div>
             </div>
+
         </div>
 
-    </div>
-
-    <div class="border bg-gray-50 rounded shadow">
-
-        <div class="border-b px-2 py-1">
-            4. Set Firmware Hash (uses hash from board, will fix later)
         </div>
 
-        <div class="p-3">
-            <button v-if="!isSettingFirmwareHash" @click="setFirmwareHash" class="border border-gray-500 px-2 bg-gray-100 hover:bg-gray-200 rounded">
-                Set Firmware Hash
-            </button>
-            <div v-else class="flex items-center space-x-1">
-                <div class="mr-1">
-                    <svg class="animate-spin h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
+        <!-- right column: steps 4-5 -->
+        <div class="space-y-4">
+            
+            <!-- step 4: Set Firmware Hash -->
+            <div class="border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-2xl shadow-lg overflow-hidden">
+
+                <div class="border-b border-gray-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/50 backdrop-blur-sm px-4 py-3">
+                    <div class="font-semibold text-gray-900 dark:text-zinc-100">4. Set Firmware Hash</div>
+                    <div class="text-xs text-gray-600 dark:text-zinc-400 mt-0.5">Uses hash from board</div>
                 </div>
-                <div>Setting Firmware Hash: please wait...</div>
+
+                <div class="p-4">
+                    <button v-if="!isSettingFirmwareHash" @click="setFirmwareHash" class="inline-flex items-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors">
+                        Set Firmware Hash
+                    </button>
+                    <div v-else class="flex items-center gap-2 text-sm text-gray-700 dark:text-zinc-300">
+                        <svg class="animate-spin h-5 w-5 text-blue-600 dark:text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>Setting Firmware Hash: please wait...</span>
+                    </div>
+                </div>
+
             </div>
+
+            <!-- step 5: Done -->
+            <div class="border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-2xl shadow-lg overflow-hidden">
+
+                <div class="border-b border-gray-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/50 backdrop-blur-sm px-4 py-3">
+                    <div class="font-semibold text-gray-900 dark:text-zinc-100">5. Done</div>
+                </div>
+
+                <div class="px-4 py-4 text-sm text-gray-700 dark:text-zinc-300 space-y-2">
+                    <div>• If you made it this far, and all previous steps were successful, your RNode should be ready to use.</div>
+                    <div>• To use RNode with <a target="_blank" href="https://github.com/liamcottle/reticulum-meshchat" class="text-blue-600 dark:text-blue-400 hover:underline font-medium">MeshChat</a>, you will need to add an <strong>RNodeInterface</strong> in the <strong>Interfaces → Add Interface</strong> page.</div>
+                    <div>• To use RNode with <a target="_blank" href="https://github.com/markqvist/Sideband/" class="text-blue-600 dark:text-blue-400 hover:underline font-medium">Sideband</a>, you will need to configure it in <strong>Hardware → RNode</strong> and enable <strong>Connectivity → Connect via RNode</strong>.</div>
+                    <div class="pt-1 text-amber-700 dark:text-amber-400 font-medium">• You must restart MeshChat and Sideband for interface setting changes to take effect, otherwise nothing will happen!</div>
+                </div>
+
+            </div>
+
         </div>
 
     </div>
 
-    <div class="border bg-gray-50 rounded shadow">
+    <!-- optional configuration sections in grid -->
+    <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
 
-        <div class="border-b px-2 py-1">
-            5. Done
-        </div>
+        <!-- Advanced Tools -->
+        <div class="border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-2xl shadow-lg overflow-hidden">
 
-        <div class="px-2 py-1 text-sm">
-            <div>• If you made it this far, and all previous steps were successful, your RNode should be ready to use.</div>
-            <div>• To use RNode with <a target="_blank" href="https://github.com/liamcottle/reticulum-meshchat" class="text-blue-500 hover:underline">MeshChat</a>, you will need to add an <u>RNodeInterface</u> in the <u>Interfaces → Add Interface</u> page.</div>
-            <div>• To use RNode with <a target="_blank" href="https://github.com/markqvist/Sideband/" class="text-blue-500 hover:underline">Sideband</a>, you will need to configure it in <u>Hardware → RNode</u> and enable <u>Connectivity → Connect via RNode</u>.</div>
-            <div>• You must restart MeshChat and Sideband for interface setting changes to take effect, otherwise nothing will happen!</div>
-        </div>
+            <div class="border-b border-gray-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/50 backdrop-blur-sm px-4 py-3">
+                <div class="font-semibold text-gray-900 dark:text-zinc-100">Advanced Tools</div>
+            </div>
 
-    </div>
+        <div class="p-4 space-y-4">
 
-    <div class="border bg-gray-50 rounded shadow">
-
-        <div class="border-b px-2 py-1">
-            Advanced Tools
-        </div>
-
-        <div class="p-3">
-
-            <div class="space-x-1">
-                <button @click="detect" class="border border-gray-500 px-2 bg-gray-100 hover:bg-gray-200 rounded">
+            <div class="flex flex-wrap gap-2">
+                <button @click="detect" class="inline-flex items-center gap-2 rounded-xl bg-gray-100 dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-zinc-300 shadow-sm transition-colors">
                     Detect RNode
                 </button>
-                <button @click="reboot" class="border border-gray-500 px-2 bg-gray-100 hover:bg-gray-200 rounded">
+                <button @click="reboot" class="inline-flex items-center gap-2 rounded-xl bg-gray-100 dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-zinc-300 shadow-sm transition-colors">
                     Reboot RNode
                 </button>
-                <button @click="readDisplay" class="border border-gray-500 px-2 bg-gray-100 hover:bg-gray-200 rounded">
+                <button @click="readDisplay" class="inline-flex items-center gap-2 rounded-xl bg-gray-100 dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-zinc-300 shadow-sm transition-colors">
                     Read Display
                 </button>
-                <button @click="dumpEeprom" class="border border-gray-500 px-2 bg-gray-100 hover:bg-gray-200 rounded">
+                <button @click="dumpEeprom" class="inline-flex items-center gap-2 rounded-xl bg-gray-100 dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-zinc-300 shadow-sm transition-colors">
                     Dump EEPROM
                 </button>
-                <button @click="wipeEeprom" class="border border-gray-500 px-2 bg-red-100 hover:bg-red-200 rounded">
+                <button @click="wipeEeprom" class="inline-flex items-center gap-2 rounded-xl bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/40 px-3 py-2 text-sm font-medium text-red-700 dark:text-red-300 shadow-sm transition-colors">
                     Wipe EEPROM
                 </button>
             </div>
 
-            <div class="text-sm text-gray-500">EEPROM dumps are shown in dev tools console.</div>
+            <div class="text-xs text-gray-500 dark:text-zinc-400">EEPROM dumps are shown in dev tools console.</div>
 
             <!-- show rnode display if available -->
-            <div v-if="rnodeDisplayImage">
-                <img :src="rnodeDisplayImage" class="h-28"/>
+            <div v-if="rnodeDisplayImage" class="rounded-xl border border-gray-200 dark:border-zinc-800 p-2 bg-gray-50 dark:bg-zinc-900">
+                <img :src="rnodeDisplayImage" class="h-28 mx-auto"/>
             </div>
 
         </div>
 
     </div>
 
-    <div class="border bg-gray-50 rounded shadow">
+        <!-- Configure Bluetooth -->
+        <div class="border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-2xl shadow-lg overflow-hidden">
 
-        <div class="border-b px-2 py-1">
-            Configure Bluetooth (optional)
-        </div>
+            <div class="border-b border-gray-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/50 backdrop-blur-sm px-4 py-3">
+                <div class="font-semibold text-gray-900 dark:text-zinc-100">Configure Bluetooth (optional)</div>
+            </div>
 
-        <div class="border-b px-2 py-1 text-sm">
+        <div class="border-b border-gray-200 dark:border-zinc-800 px-4 py-3 text-sm text-gray-700 dark:text-zinc-300 space-y-1">
             <div>• Bluetooth is not supported on all devices.</div>
             <div>• Some devices use Bluetooth Classic, and some use BLE (Bluetooth Low Energy)</div>
             <div>• Put the RNode into Bluetooth Pairing mode, then connect to it from Android Bluetooth settings.</div>
             <div>• Once you have initiated a pair request from Android, a PIN should show on the RNode display.</div>
-            <div>• In Sideband you will need to enable <u>Connect using Bluetooth</u> in <u>Hardware → RNode</u>.</div>
-            <div>• If your device uses BLE you will also need to enable <u>Device requires BLE</u> in <u>Hardware → RNode</u>.</div>
-            <div>• Don't forget to restart Sideband for the setting changes to take effect, otherwise nothing will happen!</div>
+            <div>• In Sideband you will need to enable <strong>Connect using Bluetooth</strong> in <strong>Hardware → RNode</strong>.</div>
+            <div>• If your device uses BLE you will also need to enable <strong>Device requires BLE</strong> in <strong>Hardware → RNode</strong>.</div>
+            <div class="pt-1 text-amber-700 dark:text-amber-400 font-medium">• Don't forget to restart Sideband for the setting changes to take effect!</div>
         </div>
 
-        <div class="p-3">
-            <div class="space-x-1">
-                <button @click="enableBluetooth" class="border border-gray-500 px-2 bg-gray-100 hover:bg-gray-200 rounded">
+        <div class="p-4">
+            <div class="flex flex-wrap gap-2">
+                <button @click="enableBluetooth" class="inline-flex items-center gap-2 rounded-xl bg-gray-100 dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-zinc-300 shadow-sm transition-colors">
                     Enable
                 </button>
-                <button @click="disableBluetooth" class="border border-gray-500 px-2 bg-gray-100 hover:bg-gray-200 rounded">
+                <button @click="disableBluetooth" class="inline-flex items-center gap-2 rounded-xl bg-gray-100 dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-zinc-300 shadow-sm transition-colors">
                     Disable
                 </button>
-                <button @click="startBluetoothPairing" class="border border-gray-500 px-2 bg-gray-100 hover:bg-gray-200 rounded">
+                <button @click="startBluetoothPairing" class="inline-flex items-center gap-2 rounded-xl bg-gray-100 dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-zinc-300 shadow-sm transition-colors">
                     Start Pairing
                 </button>
             </div>
@@ -259,51 +307,52 @@
 
     </div>
 
-    <div class="border bg-gray-50 rounded shadow">
+        <!-- Configure TNC Mode -->
+        <div class="border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-2xl shadow-lg overflow-hidden xl:col-span-2">
 
-        <div class="border-b px-2 py-1">
-            Configure TNC Mode (optional)
-        </div>
+            <div class="border-b border-gray-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/50 backdrop-blur-sm px-4 py-3">
+                <div class="font-semibold text-gray-900 dark:text-zinc-100">Configure TNC Mode (optional)</div>
+            </div>
 
-        <div class="border-b px-2 py-1 text-sm">
+        <div class="border-b border-gray-200 dark:border-zinc-800 px-4 py-3 text-sm text-gray-700 dark:text-zinc-300 space-y-1">
             <div>• TNC mode allows an RNode to be used as a KISS compatible TNC over the Serial Port.</div>
             <div>• This mode makes it usable with amateur radio software that can talk to a KISS TNC over a serial port.</div>
-            <div>• You must leave TNC mode disabled when using RNode with apps like MeshChat or Sideband.</div>
+            <div class="pt-1 text-amber-700 dark:text-amber-400 font-medium">• You must leave TNC mode disabled when using RNode with apps like MeshChat or Sideband.</div>
         </div>
 
-        <div class="p-3">
+        <div class="p-4 space-y-3">
 
-            <div class="flex mb-1 space-x-1">
-                <div class="min-w-[125px] my-auto text-right">Frequency (Hz)</div>
-                <input v-model="configFrequency" type="number" class="w-full sm:w-min sm:min-w-[250px] bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block px-2">
+            <div class="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+                <label class="min-w-[125px] text-sm font-medium text-gray-700 dark:text-zinc-300">Frequency (Hz)</label>
+                <input v-model="configFrequency" type="number" class="flex-1 sm:flex-none sm:min-w-[280px] bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 text-gray-900 dark:text-zinc-100 text-sm rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 px-4 py-2 shadow-sm transition-all">
             </div>
-            <div class="flex mb-1 space-x-1">
-                <div class="min-w-[125px] my-auto text-right">Bandwidth</div>
-                <select v-model="configBandwidth" class="w-full sm:w-min sm:min-w-[250px] bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block pl-2 pr-8">
+            <div class="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+                <label class="min-w-[125px] text-sm font-medium text-gray-700 dark:text-zinc-300">Bandwidth</label>
+                <select v-model="configBandwidth" class="flex-1 sm:flex-none sm:min-w-[280px] bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 text-gray-900 dark:text-zinc-100 text-sm rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 px-4 py-2 shadow-sm transition-all">
                     <option v-for="bandwidth in RNodeInterfaceDefaults.bandwidths" :value="bandwidth">{{ bandwidth / 1000 }} KHz</option>
                 </select>
             </div>
-            <div class="flex mb-1 space-x-1">
-                <div class="min-w-[125px] my-auto text-right">Tx Power (dBm)</div>
-                <input v-model="configTxPower" type="number" class="w-full sm:w-min sm:min-w-[250px] bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block px-2">
+            <div class="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+                <label class="min-w-[125px] text-sm font-medium text-gray-700 dark:text-zinc-300">Tx Power (dBm)</label>
+                <input v-model="configTxPower" type="number" class="flex-1 sm:flex-none sm:min-w-[280px] bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 text-gray-900 dark:text-zinc-100 text-sm rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 px-4 py-2 shadow-sm transition-all">
             </div>
-            <div class="flex mb-1 space-x-1">
-                <div class="min-w-[125px] my-auto text-right">Spreading Factor</div>
-                <select v-model="configSpreadingFactor" class="w-full sm:w-min sm:min-w-[250px] bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block pl-2 pr-8">
+            <div class="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+                <label class="min-w-[125px] text-sm font-medium text-gray-700 dark:text-zinc-300">Spreading Factor</label>
+                <select v-model="configSpreadingFactor" class="flex-1 sm:flex-none sm:min-w-[280px] bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 text-gray-900 dark:text-zinc-100 text-sm rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 px-4 py-2 shadow-sm transition-all">
                     <option v-for="spreadingfactor in RNodeInterfaceDefaults.spreadingfactors" :value="spreadingfactor">{{ spreadingfactor }}</option>
                 </select>
             </div>
-            <div class="flex mb-1 space-x-1">
-                <div class="min-w-[125px] my-auto text-right">Coding Rate</div>
-                <select v-model="configCodingRate" class="w-full sm:w-min sm:min-w-[250px] bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block pl-2 pr-8">
+            <div class="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+                <label class="min-w-[125px] text-sm font-medium text-gray-700 dark:text-zinc-300">Coding Rate</label>
+                <select v-model="configCodingRate" class="flex-1 sm:flex-none sm:min-w-[280px] bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 text-gray-900 dark:text-zinc-100 text-sm rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 px-4 py-2 shadow-sm transition-all">
                     <option v-for="codingrate in RNodeInterfaceDefaults.codingrates" :value="codingrate">{{ codingrate }}</option>
                 </select>
             </div>
-            <div class="space-x-1">
-                <button @click="enableTncMode" class="border border-gray-500 px-2 bg-gray-100 hover:bg-gray-200 rounded">
+            <div class="flex flex-wrap gap-2">
+                <button @click="enableTncMode" class="inline-flex items-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors">
                     Enable
                 </button>
-                <button @click="disableTncMode" class="border border-gray-500 px-2 bg-gray-100 hover:bg-gray-200 rounded">
+                <button @click="disableTncMode" class="inline-flex items-center gap-2 rounded-xl bg-gray-100 dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-zinc-300 shadow-sm transition-colors">
                     Disable
                 </button>
             </div>
@@ -312,44 +361,43 @@
 
     </div>
 
-    <div class="border bg-gray-50 rounded shadow">
+    </div>
 
-        <div class="border-b px-2 py-1">
-            Configure Display (optional)
-        </div>
+    <!-- Configure Display -->
+    <div class="border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-2xl shadow-lg overflow-hidden">
 
-        <div class="p-3 space-y-2">
+        <div class="p-4 space-y-4">
 
-            <div class="flex space-x-1">
-                <div class="my-auto">Rotation</div>
-                <button @click="setDisplayRotation(0)" class="border border-gray-500 px-2 bg-gray-100 hover:bg-gray-200 rounded">
+            <div class="flex flex-wrap items-center gap-2">
+                <label class="text-sm font-medium text-gray-700 dark:text-zinc-300">Rotation</label>
+                <button @click="setDisplayRotation(0)" class="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gray-100 dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-700 text-gray-700 dark:text-zinc-300 shadow-sm transition-colors font-medium">
                     0
                 </button>
-                <button @click="setDisplayRotation(1)" class="border border-gray-500 px-2 bg-gray-100 hover:bg-gray-200 rounded">
+                <button @click="setDisplayRotation(1)" class="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gray-100 dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-700 text-gray-700 dark:text-zinc-300 shadow-sm transition-colors font-medium">
                     1
                 </button>
-                <button @click="setDisplayRotation(2)" class="border border-gray-500 px-2 bg-gray-100 hover:bg-gray-200 rounded">
+                <button @click="setDisplayRotation(2)" class="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gray-100 dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-700 text-gray-700 dark:text-zinc-300 shadow-sm transition-colors font-medium">
                     2
                 </button>
-                <button @click="setDisplayRotation(3)" class="border border-gray-500 px-2 bg-gray-100 hover:bg-gray-200 rounded">
+                <button @click="setDisplayRotation(3)" class="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gray-100 dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-700 text-gray-700 dark:text-zinc-300 shadow-sm transition-colors font-medium">
                     3
                 </button>
             </div>
 
-            <div class="flex space-x-1">
-                <div class="my-auto">Reconditioning</div>
-                <button @click="startDisplayReconditioning" class="border border-gray-500 px-2 bg-gray-100 hover:bg-gray-200 rounded">
+            <div class="flex flex-wrap items-center gap-2">
+                <label class="text-sm font-medium text-gray-700 dark:text-zinc-300">Reconditioning</label>
+                <button @click="startDisplayReconditioning" class="inline-flex items-center gap-2 rounded-xl bg-gray-100 dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-zinc-300 shadow-sm transition-colors">
                     Start
                 </button>
-                <button @click="reboot" class="border border-gray-500 px-2 bg-gray-100 hover:bg-gray-200 rounded">
+                <button @click="reboot" class="inline-flex items-center gap-2 rounded-xl bg-gray-100 dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-zinc-300 shadow-sm transition-colors">
                     Stop
                 </button>
             </div>
 
         </div>
 
-        <div class="border-t px-2 py-1 text-sm">
-            <div>Setting display rotation requires firmware v1.80+</div>
+        <div class="border-t border-gray-200 dark:border-zinc-800 px-4 py-3 bg-gray-50 dark:bg-zinc-900/50">
+            <div class="text-xs text-gray-600 dark:text-zinc-400">Setting display rotation requires firmware v1.80+</div>
         </div>
 
     </div>
@@ -380,9 +428,12 @@
 
                 isFlashing: false,
                 flashingProgress: 0,
+                flashingStatus: "",
+                flashError: null,
 
                 isProvisioning: false,
                 isSettingFirmwareHash: false,
+                isEnteringDfuMode: false,
 
                 rnodeDisplayImage: null,
 
@@ -951,57 +1002,93 @@
             async askForSerialPort() {
 
                 if(!navigator.serial){
-                    alert("Web Serial is not supported in this browser");
+                    this.flashError = "Web Serial is not supported in this browser. Please use Chrome, Edge, or another Chromium-based browser.";
+                    alert("Web Serial is not supported in this browser. Please use Chrome, Edge, or another Chromium-based browser.");
                     return null;
                 }
 
                 // close any existing rnode connection
                 if(this.rnode){
-                    await this.rnode.close();
+                    try {
+                        await this.rnode.close();
+                    } catch(e) {
+                        console.log("Error closing existing connection:", e);
+                    }
                     this.rnode = null;
                 }
 
-                // ask user to select device
-                return await navigator.serial.requestPort({
-                    filters: [],
-                });
+                try {
+                    // ask user to select device
+                    return await navigator.serial.requestPort({
+                        filters: [],
+                    });
+                } catch(e) {
+                    if(e.name === "NotFoundError" || e.message?.includes("No port selected")) {
+                        this.flashError = "No device selected. Please select a serial port.";
+                    } else {
+                        this.flashError = "Failed to connect to device: " + (e.message || e);
+                    }
+                    throw e;
+                }
 
             },
             async askForRNode() {
 
-                // ask for serial port
-                const serialPort = await this.askForSerialPort();
-                if(!serialPort){
-                    return false;
-                }
+                try {
+                    // ask for serial port
+                    const serialPort = await this.askForSerialPort();
+                    if(!serialPort){
+                        return false;
+                    }
 
-                // check if device is an rnode
-                this.rnode = await RNode.fromSerialPort(serialPort);
-                const isRNode = await this.rnode.detect();
-                if(!isRNode){
-                    await this.rnode.close();
-                    alert("Selected device is not an RNode!");
-                    return false;
-                }
+                    this.flashingStatus = "Connecting to device...";
 
-                return this.rnode;
+                    // check if device is an rnode
+                    this.rnode = await RNode.fromSerialPort(serialPort);
+                    this.flashingStatus = "Detecting RNode...";
+                    const isRNode = await this.rnode.detect();
+                    if(!isRNode){
+                        await this.rnode.close();
+                        this.flashError = "Selected device is not an RNode! Please make sure you've selected the correct serial port.";
+                        alert("Selected device is not an RNode! Please make sure you've selected the correct serial port.");
+                        this.flashingStatus = "";
+                        return false;
+                    }
+
+                    this.flashingStatus = "";
+                    return this.rnode;
+                } catch(e) {
+                    this.flashError = "Failed to connect to RNode: " + (e.message || e);
+                    this.flashingStatus = "";
+                    throw e;
+                }
 
             },
             async enterDfuMode() {
 
-                // ask for serial port
-                const serialPort = await this.askForSerialPort();
-                if(!serialPort){
-                    return;
+                this.isEnteringDfuMode = true;
+                this.flashError = null;
+
+                try {
+                    // ask for serial port
+                    const serialPort = await this.askForSerialPort();
+                    if(!serialPort){
+                        return;
+                    }
+
+                    // enter dfu mode
+                    console.log("entering dfu mode");
+                    const flasher = new Nrf52DfuFlasher(serialPort);
+                    await flasher.enterDfuMode();
+                    console.log("entering dfu mode: done");
+
+                    alert("Device should now be in DFU mode. You can now proceed with flashing firmware.");
+                } catch(e) {
+                    this.flashError = "Failed to enter DFU mode: " + (e.message || e);
+                    alert("Failed to enter DFU mode: " + (e.message || e));
+                } finally {
+                    this.isEnteringDfuMode = false;
                 }
-
-                // enter dfu mode
-                console.log("entering dfu mode");
-                const flasher = new Nrf52DfuFlasher(serialPort);
-                await flasher.enterDfuMode();
-                console.log("entering dfu mode: done");
-
-                alert("Device should now be in DFU mode.");
 
             },
             async flash() {
@@ -1022,171 +1109,229 @@
             },
             async flashNrf52() {
 
+                this.flashError = null;
+
                 // ensure firmware file selected
                 const file = this.$refs["file"].files[0];
                 if(!file){
-                    alert("Select a firmware file first");
+                    this.flashError = "Please select a firmware file (.zip) first.";
+                    alert("Please select a firmware file (.zip) first.");
                     return;
                 }
 
-                // ask for serial port
-                const serialPort = await this.askForSerialPort();
-                if(!serialPort){
-                    return;
-                }
-
-                // update progress
-                this.isFlashing = true;
-                this.flashingProgress = 0;
+                let serialPort = null;
 
                 try {
+                    // ask for serial port
+                    serialPort = await this.askForSerialPort();
+                    if(!serialPort){
+                        return;
+                    }
+
+                    // update progress
+                    this.isFlashing = true;
+                    this.flashingProgress = 0;
+                    this.flashingStatus = "Initializing flash process...";
 
                     // flash file
                     const flasher = new Nrf52DfuFlasher(serialPort);
                     await flasher.flash(file, (percentage, message) => {
                         this.flashingProgress = percentage;
+                        this.flashingStatus = message || `Flashing: ${percentage}%`;
                     });
 
                     // flashing successful
-                    alert("Firmware has been flashed!");
+                    this.flashingStatus = "Flash complete!";
+                    alert("Firmware has been flashed successfully!");
 
                 } catch(e) {
-                    alert("Firmware flashing failed: " + e);
-                    console.log(e);
+                    const errorMsg = e.message || String(e);
+                    if(errorMsg.includes("No port selected") || errorMsg.includes("NotFoundError")) {
+                        this.flashError = "No device selected. Please select a serial port and try again.";
+                    } else if(errorMsg.includes("not an RNode") || errorMsg.includes("detect")) {
+                        this.flashError = "Failed to detect RNode. Make sure the device is connected and in the correct mode.";
+                    } else if(errorMsg.includes("DFU") || errorMsg.includes("dfu")) {
+                        this.flashError = "DFU mode error: " + errorMsg + ". Make sure the device is in DFU mode (use 'Enter DFU Mode' button first).";
+                    } else {
+                        this.flashError = "Firmware flashing failed: " + errorMsg;
+                    }
+                    alert(this.flashError);
+                    console.error("Flash error:", e);
                 } finally {
                     this.isFlashing = false;
-                }
+                    this.flashingStatus = "";
 
-                // close port
-                console.log("Closing serial port");
-                try {
-                    await this.serialPort.close();
-                } catch(e) {
-                    console.log("failed to close serial port, ignoring...", e);
+                    // close port
+                    if(serialPort) {
+                        try {
+                            await serialPort.close();
+                        } catch(e) {
+                            console.log("Failed to close serial port:", e);
+                        }
+                    }
                 }
-
 
             },
             async flashEsp32() {
 
+                this.flashError = null;
+
                 // ensure ESPLoader is available
                 if(!window.ESPLoader){
-                    alert("esptool-js could not be loaded.");
+                    this.flashError = "esptool-js could not be loaded. Please refresh the page and try again.";
+                    alert("esptool-js could not be loaded. Please refresh the page and try again.");
                     return;
                 }
 
                 // ensure flash config is known, use from selected model, or fallback to selected product
                 const flashConfig = this.selectedModel?.flash_config ?? this.selectedProduct?.flash_config;
                 if(!flashConfig){
-                    alert("Flash config is not available for the selected device.");
+                    this.flashError = "Flash configuration is not available for the selected device. Please select a different device or check the firmware file.";
+                    alert("Flash configuration is not available for the selected device. Please select a different device or check the firmware file.");
                     return;
                 }
 
                 // ensure firmware file selected
                 const file = this.$refs["file"].files[0];
                 if(!file){
-                    alert("Select a firmware file first");
+                    this.flashError = "Please select a firmware file (.zip) first.";
+                    alert("Please select a firmware file (.zip) first.");
                     return;
                 }
 
-                // ask for serial port
-                const serialPort = await this.askForSerialPort();
-                if(!serialPort){
-                    return;
-                }
-
-                // update progress
-                this.isFlashing = true;
-                this.flashingProgress = 0;
+                let serialPort = null;
 
                 try {
-
-                    // read zip file
-                    const blobReader = new window.zip.BlobReader(file);
-                    const zipReader = new window.zip.ZipReader(blobReader);
-                    const zipEntries = await zipReader.getEntries();
-
-                    // get files to flash
-                    const filesToFlash = [];
-                    for(const [address, filename] of Object.entries(flashConfig.flash_files)){
-
-                        // find file inside zip
-                        const file = zipEntries.find((zipEntry) => zipEntry.filename === filename);
-                        if(!file){
-                            throw filename + " not found in firmware file!";
-                        }
-
-                        // get file data as binary string
-                        const blob = await file.getData(new window.zip.BlobWriter());
-                        const data = await this.readAsBinaryString(blob); // fixme: deprecated, but works for now
-
-                        // add to files to flash
-                        filesToFlash.push({
-                            "address": parseInt(address),
-                            "data": data,
-                        });
-
+                    // ask for serial port
+                    serialPort = await this.askForSerialPort();
+                    if(!serialPort){
+                        return;
                     }
 
-                    // init transport and esploader
-                    const transport = new window.Transport(serialPort, true);
-                    const esploader = new window.ESPLoader({
-                        transport: transport,
-                        baudrate: 921600,
-                        debugLogging: false,
-                        enableTracing: false,
-                        terminal: {
-                            clean() {
+                    // update progress
+                    this.isFlashing = true;
+                    this.flashingProgress = 0;
+                    this.flashingStatus = "Connecting to ESP32 device...";
 
+                    try {
+
+                        // read zip file
+                        this.flashingStatus = "Reading firmware file...";
+                        const blobReader = new window.zip.BlobReader(file);
+                        const zipReader = new window.zip.ZipReader(blobReader);
+                        const zipEntries = await zipReader.getEntries();
+
+                        // get files to flash
+                        this.flashingStatus = "Extracting firmware files...";
+                        const filesToFlash = [];
+                        for(const [address, filename] of Object.entries(flashConfig.flash_files)){
+
+                            // find file inside zip
+                            const file = zipEntries.find((zipEntry) => zipEntry.filename === filename);
+                            if(!file){
+                                throw new Error(`Required file "${filename}" not found in firmware ZIP file. Please download the correct firmware for your device.`);
+                            }
+
+                            // get file data as binary string
+                            const blob = await file.getData(new window.zip.BlobWriter());
+                            const data = await this.readAsBinaryString(blob); // fixme: deprecated, but works for now
+
+                            // add to files to flash
+                            filesToFlash.push({
+                                "address": parseInt(address),
+                                "data": data,
+                            });
+
+                        }
+
+                        // init transport and esploader
+                        this.flashingStatus = "Connecting to ESP32...";
+                        const transport = new window.Transport(serialPort, true);
+                        const esploader = new window.ESPLoader({
+                            transport: transport,
+                            baudrate: 921600,
+                            debugLogging: false,
+                            enableTracing: false,
+                            terminal: {
+                                clean() {
+
+                                },
+                                writeLine(data) {
+                                    console.log(data);
+                                },
+                                write(data) {
+                                    console.log(data);
+                                },
                             },
-                            writeLine(data) {
-                                console.log(data);
+                        });
+
+                        // load device info
+                        this.flashingStatus = "Detecting ESP32 device...";
+                        await esploader.main();
+
+                        // flash device
+                        this.flashingStatus = "Flashing firmware...";
+                        await esploader.writeFlash({
+                            fileArray: filesToFlash,
+                            flashSize: flashConfig.flash_size,
+                            flashMode: "DIO",
+                            flashFreq: "80MHz",
+                            eraseAll: false,
+                            compress: true,
+                            calculateMD5Hash: (image) => CryptoJS.MD5(CryptoJS.enc.Latin1.parse(image)),
+                            reportProgress: (fileIndex, written, total) => {
+                                const currentFilePercentage = (written / total) * 100;
+                                this.flashingProgress = Math.floor(currentFilePercentage);
+                                this.flashingStatus = `Flashing file ${fileIndex + 1}/${filesToFlash.length}: ${Math.floor(currentFilePercentage)}%`;
                             },
-                            write(data) {
-                                console.log(data);
-                            },
-                        },
-                    });
+                        });
 
-                    // load device info
-                    await esploader.main();
+                        // reboot device
+                        this.flashingStatus = "Rebooting device...";
+                        await transport.setDTR(false);
+                        await new Promise((resolve) => setTimeout(resolve, 100));
+                        await transport.setDTR(true);
 
-                    // flash device
-                    await esploader.writeFlash({
-                        fileArray: filesToFlash,
-                        flashSize: flashConfig.flash_size,
-                        flashMode: "DIO",
-                        flashFreq: "80MHz",
-                        eraseAll: false,
-                        compress: true,
-                        calculateMD5Hash: (image) => CryptoJS.MD5(CryptoJS.enc.Latin1.parse(image)),
-                        reportProgress: (fileIndex, written, total) => {
-                            const currentFilePercentage = (written / total) * 100;
-                            this.flashingProgress = Math.floor(currentFilePercentage);
-                        },
-                    });
+                        // flashing successful
+                        this.flashingStatus = "Flash complete!";
+                        alert("Firmware has been flashed successfully!");
 
-                    // reboot device
-                    await transport.setDTR(false);
-                    await new Promise((resolve) => setTimeout(resolve, 100));
-                    await transport.setDTR(true);
+                    } catch(e) {
+                        const errorMsg = e.message || String(e);
+                        if(errorMsg.includes("not found in firmware")) {
+                            this.flashError = errorMsg;
+                        } else if(errorMsg.includes("Failed to connect") || errorMsg.includes("timeout")) {
+                            this.flashError = "Failed to connect to ESP32 device. Make sure:\n• The device is connected via USB\n• The correct serial port is selected\n• The device is not in use by another program\n• Try pressing the BOOT button on the device";
+                        } else if(errorMsg.includes("flash")) {
+                            this.flashError = "Flash error: " + errorMsg + "\n\nMake sure you're using the correct firmware file for your device model.";
+                        } else {
+                            this.flashError = "Firmware flashing failed: " + errorMsg;
+                        }
+                        alert(this.flashError);
+                        console.error("Flash error:", e);
+                    } finally {
+                        this.isFlashing = false;
+                        this.flashingStatus = "";
 
-                    // flashing successful
-                    alert("Firmware has been flashed!");
-
+                        // close port
+                        if(serialPort) {
+                            try {
+                                await serialPort.close();
+                            } catch(e) {
+                                console.log("Failed to close serial port:", e);
+                            }
+                        }
+                    }
                 } catch(e) {
-                    alert("Firmware flashing failed: " + e);
-                    console.log(e);
-                } finally {
+                    const errorMsg = e.message || String(e);
+                    if(errorMsg.includes("No port selected") || errorMsg.includes("NotFoundError")) {
+                        this.flashError = "No device selected. Please select a serial port and try again.";
+                    } else {
+                        this.flashError = "Failed to start flash process: " + errorMsg;
+                    }
+                    alert(this.flashError);
                     this.isFlashing = false;
-                }
-
-                // close port
-                console.log("Closing serial port");
-                try {
-                    await serialPort.close();
-                } catch(e) {
-                    console.log("failed to close serial port, ignoring...", e);
+                    this.flashingStatus = "";
                 }
 
             },
