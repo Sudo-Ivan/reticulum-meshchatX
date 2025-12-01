@@ -1,12 +1,12 @@
 from datetime import datetime, timezone
 
-from peewee import *
+from peewee import *  # noqa: F403
 from playhouse.migrate import SqliteMigrator
 from playhouse.migrate import migrate as migrate_database
 
 latest_version = 6  # increment each time new database migrations are added
 database = (
-    DatabaseProxy()
+    DatabaseProxy()  # noqa: F405
 )  # use a proxy object, as we will init real db client inside meshchat.py
 migrator = SqliteMigrator(database)
 
@@ -57,17 +57,17 @@ def migrate(current_version):
     return latest_version
 
 
-class BaseModel(Model):
+class BaseModel(Model):  # noqa: F405
     class Meta:
         database = database
 
 
 class Config(BaseModel):
-    id = BigAutoField()
-    key = CharField(unique=True)
-    value = TextField()
-    created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
-    updated_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
+    id = BigAutoField()  # noqa: F405
+    key = CharField(unique=True)  # noqa: F405
+    value = TextField()  # noqa: F405
+    created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))  # noqa: F405
+    updated_at = DateTimeField(default=lambda: datetime.now(timezone.utc))  # noqa: F405
 
     # define table name
     class Meta:
@@ -75,26 +75,26 @@ class Config(BaseModel):
 
 
 class Announce(BaseModel):
-    id = BigAutoField()
-    destination_hash = CharField(
+    id = BigAutoField()  # noqa: F405
+    destination_hash = CharField(  # noqa: F405
         unique=True,
     )  # unique destination hash that was announced
-    aspect = TextField(
+    aspect = TextField(  # noqa: F405
         index=True,
     )  # aspect is not included in announce, but we want to filter saved announces by aspect
-    identity_hash = CharField(
+    identity_hash = CharField(  # noqa: F405
         index=True,
     )  # identity hash that announced the destination
-    identity_public_key = (
-        CharField()
+    identity_public_key = (  # noqa: F405
+        CharField()  # noqa: F405
     )  # base64 encoded public key, incase we want to recreate the identity manually
-    app_data = TextField(null=True)  # base64 encoded app data bytes
-    rssi = IntegerField(null=True)
-    snr = FloatField(null=True)
-    quality = FloatField(null=True)
+    app_data = TextField(null=True)  # noqa: F405  # base64 encoded app data bytes
+    rssi = IntegerField(null=True)  # noqa: F405
+    snr = FloatField(null=True)  # noqa: F405
+    quality = FloatField(null=True)  # noqa: F405
 
-    created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
-    updated_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
+    created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))  # noqa: F405
+    updated_at = DateTimeField(default=lambda: datetime.now(timezone.utc))  # noqa: F405
 
     # define table name
     class Meta:
@@ -102,12 +102,12 @@ class Announce(BaseModel):
 
 
 class CustomDestinationDisplayName(BaseModel):
-    id = BigAutoField()
-    destination_hash = CharField(unique=True)  # unique destination hash
-    display_name = CharField()  # custom display name for the destination hash
+    id = BigAutoField()  # noqa: F405
+    destination_hash = CharField(unique=True)  # noqa: F405  # unique destination hash
+    display_name = CharField()  # noqa: F405  # custom display name for the destination hash
 
-    created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
-    updated_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
+    created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))  # noqa: F405
+    updated_at = DateTimeField(default=lambda: datetime.now(timezone.utc))  # noqa: F405
 
     # define table name
     class Meta:
@@ -115,13 +115,13 @@ class CustomDestinationDisplayName(BaseModel):
 
 
 class FavouriteDestination(BaseModel):
-    id = BigAutoField()
-    destination_hash = CharField(unique=True)  # unique destination hash
-    display_name = CharField()  # custom display name for the destination hash
-    aspect = CharField()  # e.g: nomadnetwork.node
+    id = BigAutoField()  # noqa: F405
+    destination_hash = CharField(unique=True)  # noqa: F405  # unique destination hash
+    display_name = CharField()  # noqa: F405  # custom display name for the destination hash
+    aspect = CharField()  # noqa: F405  # e.g: nomadnetwork.node
 
-    created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
-    updated_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
+    created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))  # noqa: F405
+    updated_at = DateTimeField(default=lambda: datetime.now(timezone.utc))  # noqa: F405
 
     # define table name
     class Meta:
@@ -129,36 +129,36 @@ class FavouriteDestination(BaseModel):
 
 
 class LxmfMessage(BaseModel):
-    id = BigAutoField()
-    hash = CharField(unique=True)  # unique lxmf message hash
-    source_hash = CharField(index=True)
-    destination_hash = CharField(index=True)
-    state = (
-        CharField()
+    id = BigAutoField()  # noqa: F405
+    hash = CharField(unique=True)  # noqa: F405  # unique lxmf message hash
+    source_hash = CharField(index=True)  # noqa: F405
+    destination_hash = CharField(index=True)  # noqa: F405
+    state = (  # noqa: F405
+        CharField()  # noqa: F405
     )  # state is converted from internal int to a human friendly string
-    progress = FloatField()  # progress is converted from internal float 0.00-1.00 to float between 0.00/100 (2 decimal places)
-    is_incoming = BooleanField()  # if true, we should ignore state, it's set to draft by default on incoming messages
-    method = CharField(
+    progress = FloatField()  # noqa: F405  # progress is converted from internal float 0.00-1.00 to float between 0.00/100 (2 decimal places)
+    is_incoming = BooleanField()  # noqa: F405  # if true, we should ignore state, it's set to draft by default on incoming messages
+    method = CharField(  # noqa: F405
         null=True,
     )  # what method is being used to send the message, e.g: direct, propagated
-    delivery_attempts = IntegerField(
+    delivery_attempts = IntegerField(  # noqa: F405
         default=0,
     )  # how many times delivery has been attempted for this message
-    next_delivery_attempt_at = FloatField(
+    next_delivery_attempt_at = FloatField(  # noqa: F405
         null=True,
     )  # timestamp of when the message will attempt delivery again
-    title = TextField()
-    content = TextField()
-    fields = TextField()  # json string
-    timestamp = (
-        FloatField()
+    title = TextField()  # noqa: F405
+    content = TextField()  # noqa: F405
+    fields = TextField()  # noqa: F405  # json string
+    timestamp = (  # noqa: F405
+        FloatField()  # noqa: F405
     )  # timestamp of when the message was originally created (before ever being sent)
-    rssi = IntegerField(null=True)
-    snr = FloatField(null=True)
-    quality = FloatField(null=True)
-    is_spam = BooleanField(default=False)  # if true, message is marked as spam
-    created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
-    updated_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
+    rssi = IntegerField(null=True)  # noqa: F405
+    snr = FloatField(null=True)  # noqa: F405
+    quality = FloatField(null=True)  # noqa: F405
+    is_spam = BooleanField(default=False)  # noqa: F405  # if true, message is marked as spam
+    created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))  # noqa: F405
+    updated_at = DateTimeField(default=lambda: datetime.now(timezone.utc))  # noqa: F405
 
     # define table name
     class Meta:
@@ -166,12 +166,12 @@ class LxmfMessage(BaseModel):
 
 
 class LxmfConversationReadState(BaseModel):
-    id = BigAutoField()
-    destination_hash = CharField(unique=True)  # unique destination hash
-    last_read_at = DateTimeField()
+    id = BigAutoField()  # noqa: F405
+    destination_hash = CharField(unique=True)  # noqa: F405  # unique destination hash
+    last_read_at = DateTimeField()  # noqa: F405
 
-    created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
-    updated_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
+    created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))  # noqa: F405
+    updated_at = DateTimeField(default=lambda: datetime.now(timezone.utc))  # noqa: F405
 
     # define table name
     class Meta:
@@ -179,16 +179,16 @@ class LxmfConversationReadState(BaseModel):
 
 
 class LxmfUserIcon(BaseModel):
-    id = BigAutoField()
-    destination_hash = CharField(unique=True)  # unique destination hash
-    icon_name = CharField()  # material design icon name for the destination hash
-    foreground_colour = CharField()  # hex colour to use for foreground (icon colour)
-    background_colour = (
-        CharField()
+    id = BigAutoField()  # noqa: F405
+    destination_hash = CharField(unique=True)  # noqa: F405  # unique destination hash
+    icon_name = CharField()  # noqa: F405  # material design icon name for the destination hash
+    foreground_colour = CharField()  # noqa: F405  # hex colour to use for foreground (icon colour)
+    background_colour = (  # noqa: F405
+        CharField()  # noqa: F405
     )  # hex colour to use for background (background colour)
 
-    created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
-    updated_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
+    created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))  # noqa: F405
+    updated_at = DateTimeField(default=lambda: datetime.now(timezone.utc))  # noqa: F405
 
     # define table name
     class Meta:
@@ -196,12 +196,12 @@ class LxmfUserIcon(BaseModel):
 
 
 class BlockedDestination(BaseModel):
-    id = BigAutoField()
-    destination_hash = CharField(
+    id = BigAutoField()  # noqa: F405
+    destination_hash = CharField(  # noqa: F405
         unique=True, index=True,
     )  # unique destination hash that is blocked
-    created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
-    updated_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
+    created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))  # noqa: F405
+    updated_at = DateTimeField(default=lambda: datetime.now(timezone.utc))  # noqa: F405
 
     # define table name
     class Meta:
@@ -209,12 +209,12 @@ class BlockedDestination(BaseModel):
 
 
 class SpamKeyword(BaseModel):
-    id = BigAutoField()
-    keyword = CharField(
+    id = BigAutoField()  # noqa: F405
+    keyword = CharField(  # noqa: F405
         unique=True, index=True,
     )  # keyword to match against message content
-    created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
-    updated_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
+    created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))  # noqa: F405
+    updated_at = DateTimeField(default=lambda: datetime.now(timezone.utc))  # noqa: F405
 
     # define table name
     class Meta:

@@ -240,7 +240,7 @@ class AudioCallReceiver:
                         )
                         link.teardown()
                         return
-            except:
+            except Exception:  # noqa: E722
                 # if we can't get identity yet, we'll check later
                 pass
 

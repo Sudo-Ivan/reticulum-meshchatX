@@ -18,6 +18,6 @@ class AnnounceHandler:
                 app_data,
                 announce_packet_hash,
             )
-        except:
+        except Exception:  # noqa: E722
             # ignore failure to handle received announce
             pass
