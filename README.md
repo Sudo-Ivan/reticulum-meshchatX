@@ -43,7 +43,7 @@ You can run `make run` or `make develop` (a thin alias) to start the backend + f
 
 ### Python packaging
 
-The Python build is driven entirely by Poetry now. Run `python scripts/sync_version.py` or `make sync-version` before packaging so `pyproject.toml` and `src/version.py` match `package.json`. After that:
+The Python build is driven entirely by Poetry now. Run `python3 scripts/sync_version.py` or `make sync-version` before packaging so `pyproject.toml` and `src/version.py` match `package.json`. After that:
 
 ```bash
 python -m poetry install
