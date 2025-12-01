@@ -1986,14 +1986,14 @@ class ReticulumMeshChat:
                     nomadnetwork_node_announce is not None
                     and nomadnetwork_node_announce.app_data is not None
                 ):
-                    operator_display_name = self.parse_nomadnetwork_node_display_name(
+                    operator_display_name = ReticulumMeshChat.parse_nomadnetwork_node_display_name(
                         nomadnetwork_node_announce.app_data, None,
                     )
 
                 # parse app_data so we can see if propagation is enabled or disabled for this node
                 is_propagation_enabled = None
                 per_transfer_limit = None
-                propagation_node_data = self.parse_lxmf_propagation_node_app_data(
+                propagation_node_data = ReticulumMeshChat.parse_lxmf_propagation_node_app_data(
                     announce.app_data,
                 )
                 if propagation_node_data is not None:
@@ -2753,8 +2753,8 @@ class ReticulumMeshChat:
                             other_user_hash,
                         ),
                         "destination_hash": other_user_hash,
-                        "is_unread": self.is_lxmf_conversation_unread(other_user_hash),
-                        "failed_messages_count": self.lxmf_conversation_failed_messages_count(
+                        "is_unread": ReticulumMeshChat.is_lxmf_conversation_unread(other_user_hash),
+                        "failed_messages_count": ReticulumMeshChat.lxmf_conversation_failed_messages_count(
                             other_user_hash,
                         ),
                         "has_attachments": has_attachments,
@@ -3749,7 +3749,7 @@ class ReticulumMeshChat:
         if announce.aspect == "lxmf.delivery":
             display_name = self.parse_lxmf_display_name(announce.app_data)
         elif announce.aspect == "nomadnetwork.node":
-            display_name = self.parse_nomadnetwork_node_display_name(announce.app_data)
+            display_name = ReticulumMeshChat.parse_nomadnetwork_node_display_name(announce.app_data)
 
         # find lxmf user icon from database
         lxmf_user_icon = None
@@ -4658,14 +4658,15 @@ class ReticulumMeshChat:
         # if app data is available in database, it should be base64 encoded text that was announced
         # we will return the parsed lxmf display name as the conversation name
         if lxmf_announce is not None and lxmf_announce.app_data is not None:
-            return self.parse_lxmf_display_name(app_data_base64=lxmf_announce.app_data)
+            return ReticulumMeshChat.parse_lxmf_display_name(app_data_base64=lxmf_announce.app_data)
 
         # announce did not have app data, so provide a fallback name
         return "Anonymous Peer"
 
     # reads the lxmf display name from the provided base64 app data
+    @staticmethod
     def parse_lxmf_display_name(
-        self, app_data_base64: str, default_value: str | None = "Anonymous Peer",
+        app_data_base64: str, default_value: str | None = "Anonymous Peer",
     ):
         try:
             app_data_bytes = base64.b64decode(app_data_base64)
@@ -4678,7 +4679,8 @@ class ReticulumMeshChat:
         return default_value
 
     # reads the lxmf stamp cost from the provided base64 app data
-    def parse_lxmf_stamp_cost(self, app_data_base64: str):
+    @staticmethod
+    def parse_lxmf_stamp_cost(app_data_base64: str):
         try:
             app_data_bytes = base64.b64decode(app_data_base64)
             return LXMF.stamp_cost_from_app_data(app_data_bytes)
@@ -4686,8 +4688,9 @@ class ReticulumMeshChat:
             return None
 
     # reads the nomadnetwork node display name from the provided base64 app data
+    @staticmethod
     def parse_nomadnetwork_node_display_name(
-        self, app_data_base64: str, default_value: str | None = "Anonymous Node",
+        app_data_base64: str, default_value: str | None = "Anonymous Node",
     ):
         try:
             app_data_bytes = base64.b64decode(app_data_base64)
@@ -4696,7 +4699,8 @@ class ReticulumMeshChat:
             return default_value
 
     # parses lxmf propagation node app data
-    def parse_lxmf_propagation_node_app_data(self, app_data_base64: str):
+    @staticmethod
+    def parse_lxmf_propagation_node_app_data(app_data_base64: str):
         try:
             app_data_bytes = base64.b64decode(app_data_base64)
             data = msgpack.unpackb(app_data_bytes)
@@ -4709,7 +4713,8 @@ class ReticulumMeshChat:
             return None
 
     # returns true if the conversation has messages newer than the last read at timestamp
-    def is_lxmf_conversation_unread(self, destination_hash):
+    @staticmethod
+    def is_lxmf_conversation_unread(destination_hash):
         # get lxmf conversation read state from database for the provided destination hash
         lxmf_conversation_read_state = (
             database.LxmfConversationReadState.select()
@@ -4745,7 +4750,8 @@ class ReticulumMeshChat:
         return conversation_last_read_at < conversation_latest_message_at
 
     # returns number of messages that failed to send in a conversation
-    def lxmf_conversation_failed_messages_count(self, destination_hash: str):
+    @staticmethod
+    def lxmf_conversation_failed_messages_count(destination_hash: str):
         return (
             database.LxmfMessage.select()
             .where(database.LxmfMessage.state == "failed")
@@ -4754,7 +4760,8 @@ class ReticulumMeshChat:
         )
 
     # find an interface by name
-    def find_interface_by_name(self, name: str):
+    @staticmethod
+    def find_interface_by_name(name: str):
         for interface in RNS.Transport.interfaces:
             interface_name = str(interface)
             if name == interface_name:
