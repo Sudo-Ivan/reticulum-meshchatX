@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 
 import argparse
+import asyncio
+import base64
 import copy
 import io
 import json
@@ -9,30 +11,32 @@ import platform
 import sys
 import threading
 import time
+import webbrowser
+from collections.abc import Callable
 from datetime import datetime, timezone
-from typing import Callable, List
 
+import LXMF
+import psutil
 import RNS
 import RNS.vendor.umsgpack as msgpack
-import LXMF
+from aiohttp import WSCloseCode, WSMessage, WSMsgType, web
 from LXMF import LXMRouter
-from aiohttp import web, WSMessage, WSMsgType, WSCloseCode
-import asyncio
-import base64
-import webbrowser
-
-from peewee import SqliteDatabase, fn
+from peewee import SqliteDatabase
 from serial.tools import list_ports
-import psutil
 
 import database
 from src.backend.announce_handler import AnnounceHandler
 from src.backend.async_utils import AsyncUtils
+from src.backend.audio_call_manager import AudioCall, AudioCallManager
 from src.backend.colour_utils import ColourUtils
 from src.backend.interface_config_parser import InterfaceConfigParser
 from src.backend.interface_editor import InterfaceEditor
-from src.backend.lxmf_message_fields import LxmfImageField, LxmfFileAttachmentsField, LxmfFileAttachment, LxmfAudioField
-from src.backend.audio_call_manager import AudioCall, AudioCallManager
+from src.backend.lxmf_message_fields import (
+    LxmfAudioField,
+    LxmfFileAttachment,
+    LxmfFileAttachmentsField,
+    LxmfImageField,
+)
 from src.backend.sideband_commands import SidebandCommands
 
 
@@ -48,9 +52,7 @@ def get_file_path(filename):
 
 
 class ReticulumMeshChat:
-
     def __init__(self, identity: RNS.Identity, storage_dir, reticulum_config_dir):
-
         # when providing a custom storage_dir, files will be saved as
         # <storage_dir>/identities/<identity_hex>/
         # <storage_dir>/identities/<identity_hex>/database.db
@@ -61,8 +63,10 @@ class ReticulumMeshChat:
 
         # ensure a storage path exists for the loaded identity
         self.storage_dir = storage_dir or os.path.join("storage")
-        self.storage_path = os.path.join(self.storage_dir, "identities", identity.hash.hex())
-        print("Using Storage Path: {}".format(self.storage_path))
+        self.storage_path = os.path.join(
+            self.storage_dir, "identities", identity.hash.hex(),
+        )
+        print(f"Using Storage Path: {self.storage_path}")
         os.makedirs(self.storage_path, exist_ok=True)
 
         # define path to files based on storage path
@@ -77,17 +81,19 @@ class ReticulumMeshChat:
         database.database.initialize(sqlite_database)
         self.db = database.database
         self.db.connect()
-        self.db.create_tables([
-            database.Config,
-            database.Announce,
-            database.CustomDestinationDisplayName,
-            database.FavouriteDestination,
-            database.LxmfMessage,
-            database.LxmfConversationReadState,
-            database.LxmfUserIcon,
-            database.BlockedDestination,
-            database.SpamKeyword,
-        ])
+        self.db.create_tables(
+            [
+                database.Config,
+                database.Announce,
+                database.CustomDestinationDisplayName,
+                database.FavouriteDestination,
+                database.LxmfMessage,
+                database.LxmfConversationReadState,
+                database.LxmfUserIcon,
+                database.BlockedDestination,
+                database.SpamKeyword,
+            ],
+        )
 
         # init config
         self.config = Config()
@@ -102,54 +108,86 @@ class ReticulumMeshChat:
 
         # migrate database
         current_database_version = self.config.database_version.get()
-        migrated_database_version = database.migrate(current_version=current_database_version)
+        migrated_database_version = database.migrate(
+            current_version=current_database_version,
+        )
         self.config.database_version.set(migrated_database_version)
 
         # vacuum database on start to shrink its file size
         sqlite_database.execute_sql("VACUUM")
 
         # lxmf messages in outbound or sending state should be marked as failed when app starts as they are no longer being processed
-        (database.LxmfMessage.update(state="failed")
-         .where(database.LxmfMessage.state == "outbound")
-         .orwhere((database.LxmfMessage.state == "sent") & (database.LxmfMessage.method == "opportunistic"))
-         .orwhere(database.LxmfMessage.state == "sending").execute())
+        (
+            database.LxmfMessage.update(state="failed")
+            .where(database.LxmfMessage.state == "outbound")
+            .orwhere(
+                (database.LxmfMessage.state == "sent")
+                & (database.LxmfMessage.method == "opportunistic"),
+            )
+            .orwhere(database.LxmfMessage.state == "sending")
+            .execute()
+        )
 
         # init reticulum
         self.reticulum = RNS.Reticulum(reticulum_config_dir)
         self.identity = identity
 
         # init lxmf router
-        self.message_router = LXMF.LXMRouter(identity=self.identity, storagepath=lxmf_router_path)
+        # get propagation node stamp cost from config (only used if running a propagation node)
+        propagation_stamp_cost = self.config.lxmf_propagation_node_stamp_cost.get()
+        self.message_router = LXMF.LXMRouter(
+            identity=self.identity,
+            storagepath=lxmf_router_path,
+            propagation_cost=propagation_stamp_cost,
+        )
         self.message_router.PROCESSING_INTERVAL = 1
 
         # increase limit for incoming lxmf messages (received over a resource), to allow receiving larger attachments
         # the lxmf router expects delivery_per_transfer_limit to be provided in kilobytes, so we will do that...
-        self.message_router.delivery_per_transfer_limit = self.config.lxmf_delivery_transfer_limit_in_bytes.get() / 1000
+        self.message_router.delivery_per_transfer_limit = (
+            self.config.lxmf_delivery_transfer_limit_in_bytes.get() / 1000
+        )
 
         # register lxmf identity
+        inbound_stamp_cost = self.config.lxmf_inbound_stamp_cost.get()
         self.local_lxmf_destination = self.message_router.register_delivery_identity(
             identity=self.identity,
             display_name=self.config.display_name.get(),
+            stamp_cost=inbound_stamp_cost,
         )
 
         # set a callback for when an lxmf message is received
         self.message_router.register_delivery_callback(self.on_lxmf_delivery)
 
         # update active propagation node
-        self.set_active_propagation_node(self.config.lxmf_preferred_propagation_node_destination_hash.get())
+        self.set_active_propagation_node(
+            self.config.lxmf_preferred_propagation_node_destination_hash.get(),
+        )
 
         # enable propagation node (we don't call with false if disabled, as no need to announce disabled state every launch)
         if self.config.lxmf_local_propagation_node_enabled.get():
             self.enable_local_propagation_node()
 
         # handle received announces based on aspect
-        RNS.Transport.register_announce_handler(AnnounceHandler("call.audio", self.on_audio_call_announce_received))
-        RNS.Transport.register_announce_handler(AnnounceHandler("lxmf.delivery", self.on_lxmf_announce_received))
-        RNS.Transport.register_announce_handler(AnnounceHandler("lxmf.propagation", self.on_lxmf_propagation_announce_received))
-        RNS.Transport.register_announce_handler(AnnounceHandler("nomadnetwork.node", self.on_nomadnet_node_announce_received))
+        RNS.Transport.register_announce_handler(
+            AnnounceHandler("call.audio", self.on_audio_call_announce_received),
+        )
+        RNS.Transport.register_announce_handler(
+            AnnounceHandler("lxmf.delivery", self.on_lxmf_announce_received),
+        )
+        RNS.Transport.register_announce_handler(
+            AnnounceHandler(
+                "lxmf.propagation", self.on_lxmf_propagation_announce_received,
+            ),
+        )
+        RNS.Transport.register_announce_handler(
+            AnnounceHandler(
+                "nomadnetwork.node", self.on_nomadnet_node_announce_received,
+            ),
+        )
 
         # remember websocket clients
-        self.websocket_clients: List[web.WebSocketResponse] = []
+        self.websocket_clients: list[web.WebSocketResponse] = []
 
         # track announce timestamps for rate calculation
         self.announce_timestamps = []
@@ -162,8 +200,13 @@ class ReticulumMeshChat:
         self.download_id_counter = 0
 
         # register audio call identity
-        self.audio_call_manager = AudioCallManager(identity=self.identity, is_destination_blocked_callback=self.is_destination_blocked)
-        self.audio_call_manager.register_incoming_call_callback(self.on_incoming_audio_call)
+        self.audio_call_manager = AudioCallManager(
+            identity=self.identity,
+            is_destination_blocked_callback=self.is_destination_blocked,
+        )
+        self.audio_call_manager.register_incoming_call_callback(
+            self.on_incoming_audio_call,
+        )
 
         # start background thread for auto announce loop
         thread = threading.Thread(target=asyncio.run, args=(self.announce_loop(),))
@@ -171,7 +214,9 @@ class ReticulumMeshChat:
         thread.start()
 
         # start background thread for auto syncing propagation nodes
-        thread = threading.Thread(target=asyncio.run, args=(self.announce_sync_propagation_nodes(),))
+        thread = threading.Thread(
+            target=asyncio.run, args=(self.announce_sync_propagation_nodes(),),
+        )
         thread.daemon = True
         thread.start()
 
@@ -184,19 +229,20 @@ class ReticulumMeshChat:
     # automatically announces based on user config
     async def announce_loop(self):
         while True:
-
             should_announce = False
 
             # check if auto announce is enabled
             if self.config.auto_announce_enabled.get():
-
                 # check if we have announced recently
                 last_announced_at = self.config.last_announced_at.get()
                 if last_announced_at is not None:
-
                     # determine when next announce should be sent
-                    auto_announce_interval_seconds = self.config.auto_announce_interval_seconds.get()
-                    next_announce_at = last_announced_at + auto_announce_interval_seconds
+                    auto_announce_interval_seconds = (
+                        self.config.auto_announce_interval_seconds.get()
+                    )
+                    next_announce_at = (
+                        last_announced_at + auto_announce_interval_seconds
+                    )
 
                     # we should announce if current time has passed next announce at timestamp
                     if time.time() > next_announce_at:
@@ -216,17 +262,16 @@ class ReticulumMeshChat:
     # automatically syncs propagation nodes based on user config
     async def announce_sync_propagation_nodes(self):
         while True:
-
             should_sync = False
 
             # check if auto sync is enabled
             auto_sync_interval_seconds = self.config.lxmf_preferred_propagation_node_auto_sync_interval_seconds.get()
             if auto_sync_interval_seconds > 0:
-
                 # check if we have synced recently
-                last_synced_at = self.config.lxmf_preferred_propagation_node_last_synced_at.get()
+                last_synced_at = (
+                    self.config.lxmf_preferred_propagation_node_last_synced_at.get()
+                )
                 if last_synced_at is not None:
-
                     # determine when next sync should happen
                     next_sync_at = last_synced_at + auto_sync_interval_seconds
 
@@ -247,15 +292,15 @@ class ReticulumMeshChat:
 
     # uses the provided destination hash as the active propagation node
     def set_active_propagation_node(self, destination_hash: str | None):
-
         # set outbound propagation node
         if destination_hash is not None and destination_hash != "":
             try:
-                self.message_router.set_outbound_propagation_node(bytes.fromhex(destination_hash))
+                self.message_router.set_outbound_propagation_node(
+                    bytes.fromhex(destination_hash),
+                )
             except:
                 # failed to set propagation node, clear it to ensure we don't use an old one by mistake
                 self.remove_active_propagation_node()
-                pass
 
         # stop using propagation node
         else:
@@ -282,7 +327,6 @@ class ReticulumMeshChat:
                 self.message_router.disable_propagation()
         except:
             print("failed to enable or disable propagation node")
-            pass
 
     def _get_reticulum_section(self):
         try:
@@ -297,7 +341,6 @@ class ReticulumMeshChat:
         return reticulum_config
 
     def _get_interfaces_section(self):
-
         try:
             interfaces = self.reticulum.config["interfaces"]
         except Exception:
@@ -335,59 +378,73 @@ class ReticulumMeshChat:
 
         interfaces = self._get_interfaces_section()
         if len(interfaces) == 0:
-            guidance.append({
-                "id": "no_interfaces",
-                "title": "No Reticulum interfaces configured",
-                "description": "Add at least one Reticulum interface so MeshChat can talk to your radio or transport.",
-                "action_route": "/interfaces/add",
-                "action_label": "Add Interface",
-                "severity": "warning",
-            })
+            guidance.append(
+                {
+                    "id": "no_interfaces",
+                    "title": "No Reticulum interfaces configured",
+                    "description": "Add at least one Reticulum interface so MeshChat can talk to your radio or transport.",
+                    "action_route": "/interfaces/add",
+                    "action_label": "Add Interface",
+                    "severity": "warning",
+                },
+            )
 
         if not self.reticulum.transport_enabled():
-            guidance.append({
-                "id": "transport_disabled",
-                "title": "Transport mode is disabled",
-                "description": "Enable transport to allow MeshChat to relay traffic over your configured interfaces.",
-                "action_route": "/settings",
-                "action_label": "Open Settings",
-                "severity": "info",
-            })
+            guidance.append(
+                {
+                    "id": "transport_disabled",
+                    "title": "Transport mode is disabled",
+                    "description": "Enable transport to allow MeshChat to relay traffic over your configured interfaces.",
+                    "action_route": "/settings",
+                    "action_label": "Open Settings",
+                    "severity": "info",
+                },
+            )
 
         if not self.config.auto_announce_enabled.get():
-            guidance.append({
-                "id": "announce_disabled",
-                "title": "Auto announcements are turned off",
-                "description": "Automatic announces make it easier for other peers to discover you. Enable them if you want to stay visible.",
-                "action_route": "/settings",
-                "action_label": "Manage Announce Settings",
-                "severity": "info",
-            })
+            guidance.append(
+                {
+                    "id": "announce_disabled",
+                    "title": "Auto announcements are turned off",
+                    "description": "Automatic announces make it easier for other peers to discover you. Enable them if you want to stay visible.",
+                    "action_route": "/settings",
+                    "action_label": "Manage Announce Settings",
+                    "severity": "info",
+                },
+            )
 
         return guidance
 
     def _conversation_messages_query(self, destination_hash: str):
         local_hash = self.local_lxmf_destination.hexhash
-        return (database.LxmfMessage
-                .select()
-                .where(
-                    ((database.LxmfMessage.source_hash == local_hash) & (database.LxmfMessage.destination_hash == destination_hash))
-                    | ((database.LxmfMessage.destination_hash == local_hash) & (database.LxmfMessage.source_hash == destination_hash))
-                ))
+        return database.LxmfMessage.select().where(
+            (
+                (database.LxmfMessage.source_hash == local_hash)
+                & (database.LxmfMessage.destination_hash == destination_hash)
+            )
+            | (
+                (database.LxmfMessage.destination_hash == local_hash)
+                & (database.LxmfMessage.source_hash == destination_hash)
+            ),
+        )
 
     def get_conversation_latest_message(self, destination_hash: str):
-        return (self._conversation_messages_query(destination_hash)
-                .order_by(database.LxmfMessage.id.desc())
-                .get_or_none())
+        return (
+            self._conversation_messages_query(destination_hash)
+            .order_by(database.LxmfMessage.id.desc())
+            .get_or_none()
+        )
 
     def conversation_has_attachments(self, destination_hash: str):
-        query = (self._conversation_messages_query(destination_hash)
-                 .where(
-                     database.LxmfMessage.fields.contains('"image"')
-                     | database.LxmfMessage.fields.contains('"audio"')
-                     | database.LxmfMessage.fields.contains('"file_attachments"')
-                 )
-                 .limit(1))
+        query = (
+            self._conversation_messages_query(destination_hash)
+            .where(
+                database.LxmfMessage.fields.contains('"image"')
+                | database.LxmfMessage.fields.contains('"audio"')
+                | database.LxmfMessage.fields.contains('"file_attachments"'),
+            )
+            .limit(1)
+        )
         return query.exists()
 
     def message_fields_have_attachments(self, fields_json: str | None):
@@ -399,7 +456,9 @@ class ReticulumMeshChat:
             return False
         if "image" in fields or "audio" in fields:
             return True
-        if "file_attachments" in fields and isinstance(fields["file_attachments"], list):
+        if "file_attachments" in fields and isinstance(
+            fields["file_attachments"], list,
+        ):
             return len(fields["file_attachments"]) > 0
         return False
 
@@ -411,15 +470,18 @@ class ReticulumMeshChat:
         like_term = f"%{search_term}%"
 
         matches = set()
-        query = (database.LxmfMessage
-                 .select(database.LxmfMessage.source_hash, database.LxmfMessage.destination_hash)
-                 .where(
-                     ((database.LxmfMessage.source_hash == local_hash) | (database.LxmfMessage.destination_hash == local_hash))
-                     & (
-                         database.LxmfMessage.title ** like_term
-                         | database.LxmfMessage.content ** like_term
-                     )
-                 ))
+        query = database.LxmfMessage.select(
+            database.LxmfMessage.source_hash, database.LxmfMessage.destination_hash,
+        ).where(
+            (
+                (database.LxmfMessage.source_hash == local_hash)
+                | (database.LxmfMessage.destination_hash == local_hash)
+            )
+            & (
+                database.LxmfMessage.title**like_term
+                | database.LxmfMessage.content**like_term
+            ),
+        )
 
         for message in query:
             if message.source_hash == local_hash:
@@ -437,14 +499,19 @@ class ReticulumMeshChat:
 
     # handle receiving a new audio call
     def on_incoming_audio_call(self, audio_call: AudioCall):
-        print("on_incoming_audio_call: {}".format(audio_call.link.hash.hex()))
-        AsyncUtils.run_async(self.websocket_broadcast(json.dumps({
-            "type": "incoming_audio_call",
-        })))
+        print(f"on_incoming_audio_call: {audio_call.link.hash.hex()}")
+        AsyncUtils.run_async(
+            self.websocket_broadcast(
+                json.dumps(
+                    {
+                        "type": "incoming_audio_call",
+                    },
+                ),
+            ),
+        )
 
     # web server has shutdown, likely ctrl+c, but if we don't do the following, the script never exits
     async def shutdown(self, app):
-
         # force close websocket clients
         for websocket_client in self.websocket_clients:
             await websocket_client.close(code=WSCloseCode.GOING_AWAY)
@@ -455,45 +522,51 @@ class ReticulumMeshChat:
         RNS.exit()
 
     def run(self, host, port, launch_browser: bool):
-
         # create route table
         routes = web.RouteTableDef()
 
         # serve index.html
         @routes.get("/")
         async def index(request):
-            return web.FileResponse(path=get_file_path("public/index.html"), headers={
-                # don't allow browser to store page in cache, otherwise new app versions may get stale ui
-                "Cache-Control": "no-cache, no-store",
-            })
+            return web.FileResponse(
+                path=get_file_path("public/index.html"),
+                headers={
+                    # don't allow browser to store page in cache, otherwise new app versions may get stale ui
+                    "Cache-Control": "no-cache, no-store",
+                },
+            )
 
         # serve ping
         @routes.get("/api/v1/status")
         async def index(request):
-            return web.json_response({
-                "status": "ok",
-            })
+            return web.json_response(
+                {
+                    "status": "ok",
+                },
+            )
 
         # fetch com ports
         @routes.get("/api/v1/comports")
         async def index(request):
-
             comports = []
             for comport in list_ports.comports():
-                comports.append({
-                    "device": comport.device,
-                    "product": comport.product,
-                    "serial_number": comport.serial_number,
-                })
+                comports.append(
+                    {
+                        "device": comport.device,
+                        "product": comport.product,
+                        "serial_number": comport.serial_number,
+                    },
+                )
 
-            return web.json_response({
-                "comports": comports,
-            })
+            return web.json_response(
+                {
+                    "comports": comports,
+                },
+            )
 
         # fetch reticulum interfaces
         @routes.get("/api/v1/reticulum/interfaces")
         async def index(request):
-
             interfaces = self._get_interfaces_snapshot()
 
             processed_interfaces = {}
@@ -504,7 +577,13 @@ class ReticulumMeshChat:
                 if interface_data.get("type") == "RNodeMultiInterface":
                     sub_interfaces = []
                     for sub_name, sub_config in interface_data.items():
-                        if sub_name not in {"type", "port", "interface_enabled", "selected_interface_mode", "configured_bitrate"}:
+                        if sub_name not in {
+                            "type",
+                            "port",
+                            "interface_enabled",
+                            "selected_interface_mode",
+                            "configured_bitrate",
+                        }:
                             if isinstance(sub_config, dict):
                                 sub_config["name"] = sub_name
                                 sub_interfaces.append(sub_config)
@@ -517,29 +596,36 @@ class ReticulumMeshChat:
 
                 processed_interfaces[interface_name] = interface_data
 
-            return web.json_response({
-                "interfaces": processed_interfaces,
-            })
+            return web.json_response(
+                {
+                    "interfaces": processed_interfaces,
+                },
+            )
 
         # enable reticulum interface
         @routes.post("/api/v1/reticulum/interfaces/enable")
         async def index(request):
-
             # get request data
             data = await request.json()
-            interface_name = data.get('name')
+            interface_name = data.get("name")
 
             if interface_name is None or interface_name == "":
-                return web.json_response({
-                    "message": "Interface name is required",
-                }, status=422)
+                return web.json_response(
+                    {
+                        "message": "Interface name is required",
+                    },
+                    status=422,
+                )
 
             # enable interface
             interfaces = self._get_interfaces_section()
             if interface_name not in interfaces:
-                return web.json_response({
-                    "message": "Interface not found",
-                }, status=404)
+                return web.json_response(
+                    {
+                        "message": "Interface not found",
+                    },
+                    status=404,
+                )
             interface = interfaces[interface_name]
             if "enabled" in interface:
                 interface["enabled"] = "true"
@@ -555,33 +641,43 @@ class ReticulumMeshChat:
 
             # save config
             if not self._write_reticulum_config():
-                return web.json_response({
-                    "message": "Failed to write Reticulum config",
-                }, status=500)
+                return web.json_response(
+                    {
+                        "message": "Failed to write Reticulum config",
+                    },
+                    status=500,
+                )
 
-            return web.json_response({
-                "message": "Interface is now enabled",
-            })
+            return web.json_response(
+                {
+                    "message": "Interface is now enabled",
+                },
+            )
 
         # disable reticulum interface
         @routes.post("/api/v1/reticulum/interfaces/disable")
         async def index(request):
-
             # get request data
             data = await request.json()
-            interface_name = data.get('name')
+            interface_name = data.get("name")
 
             if interface_name is None or interface_name == "":
-                return web.json_response({
-                    "message": "Interface name is required",
-                }, status=422)
+                return web.json_response(
+                    {
+                        "message": "Interface name is required",
+                    },
+                    status=422,
+                )
 
             # disable interface
             interfaces = self._get_interfaces_section()
             if interface_name not in interfaces:
-                return web.json_response({
-                    "message": "Interface not found",
-                }, status=404)
+                return web.json_response(
+                    {
+                        "message": "Interface not found",
+                    },
+                    status=404,
+                )
             interface = interfaces[interface_name]
             if "enabled" in interface:
                 interface["enabled"] = "false"
@@ -597,76 +693,99 @@ class ReticulumMeshChat:
 
             # save config
             if not self._write_reticulum_config():
-                return web.json_response({
-                    "message": "Failed to write Reticulum config",
-                }, status=500)
+                return web.json_response(
+                    {
+                        "message": "Failed to write Reticulum config",
+                    },
+                    status=500,
+                )
 
-            return web.json_response({
-                "message": "Interface is now disabled",
-            })
+            return web.json_response(
+                {
+                    "message": "Interface is now disabled",
+                },
+            )
 
         # delete reticulum interface
         @routes.post("/api/v1/reticulum/interfaces/delete")
         async def index(request):
-
             # get request data
             data = await request.json()
-            interface_name = data.get('name')
+            interface_name = data.get("name")
 
             if interface_name is None or interface_name == "":
-                return web.json_response({
-                    "message": "Interface name is required",
-                }, status=422)
+                return web.json_response(
+                    {
+                        "message": "Interface name is required",
+                    },
+                    status=422,
+                )
 
             interfaces = self._get_interfaces_section()
             if interface_name not in interfaces:
-                return web.json_response({
-                    "message": "Interface not found",
-                }, status=404)
+                return web.json_response(
+                    {
+                        "message": "Interface not found",
+                    },
+                    status=404,
+                )
 
             # delete interface
             del interfaces[interface_name]
 
             # save config
             if not self._write_reticulum_config():
-                return web.json_response({
-                    "message": "Failed to write Reticulum config",
-                }, status=500)
+                return web.json_response(
+                    {
+                        "message": "Failed to write Reticulum config",
+                    },
+                    status=500,
+                )
 
-            return web.json_response({
-                "message": "Interface has been deleted",
-            })
+            return web.json_response(
+                {
+                    "message": "Interface has been deleted",
+                },
+            )
 
         # add reticulum interface
         @routes.post("/api/v1/reticulum/interfaces/add")
         async def index(request):
-
             # get request data
             data = await request.json()
-            interface_name = data.get('name')
-            interface_type = data.get('type')
-            allow_overwriting_interface = data.get('allow_overwriting_interface', False)
+            interface_name = data.get("name")
+            interface_type = data.get("type")
+            allow_overwriting_interface = data.get("allow_overwriting_interface", False)
 
             # ensure name is provided
             if interface_name is None or interface_name == "":
-                return web.json_response({
-                    "message": "Name is required",
-                }, status=422)
+                return web.json_response(
+                    {
+                        "message": "Name is required",
+                    },
+                    status=422,
+                )
 
             # ensure type name provided
             if interface_type is None or interface_type == "":
-                return web.json_response({
-                    "message": "Type is required",
-                }, status=422)
+                return web.json_response(
+                    {
+                        "message": "Type is required",
+                    },
+                    status=422,
+                )
 
             # get existing interfaces
             interfaces = self._get_interfaces_section()
 
             # ensure name is not for an existing interface, to prevent overwriting
             if allow_overwriting_interface is False and interface_name in interfaces:
-                return web.json_response({
-                    "message": "Name is already in use by another interface",
-                }, status=422)
+                return web.json_response(
+                    {
+                        "message": "Name is already in use by another interface",
+                    },
+                    status=422,
+                )
 
             # get existing interface details if available
             interface_details = {}
@@ -677,15 +796,19 @@ class ReticulumMeshChat:
             interface_details["type"] = interface_type
 
             # if interface doesn't have enabled or interface_enabled setting already, enable it by default
-            if "enabled" not in interface_details and "interface_enabled" not in interface_details:
+            if (
+                "enabled" not in interface_details
+                and "interface_enabled" not in interface_details
+            ):
                 interface_details["interface_enabled"] = "true"
 
             # handle AutoInterface
             if interface_type == "AutoInterface":
-
                 # set optional AutoInterface options
                 InterfaceEditor.update_value(interface_details, data, "group_id")
-                InterfaceEditor.update_value(interface_details, data, "multicast_address_type")
+                InterfaceEditor.update_value(
+                    interface_details, data, "multicast_address_type",
+                )
                 InterfaceEditor.update_value(interface_details, data, "devices")
                 InterfaceEditor.update_value(interface_details, data, "ignored_devices")
                 InterfaceEditor.update_value(interface_details, data, "discovery_scope")
@@ -694,20 +817,25 @@ class ReticulumMeshChat:
 
             # handle TCPClientInterface
             if interface_type == "TCPClientInterface":
-
                 # ensure target host provided
-                interface_target_host = data.get('target_host')
+                interface_target_host = data.get("target_host")
                 if interface_target_host is None or interface_target_host == "":
-                    return web.json_response({
-                        "message": "Target Host is required",
-                    }, status=422)
+                    return web.json_response(
+                        {
+                            "message": "Target Host is required",
+                        },
+                        status=422,
+                    )
 
                 # ensure target port provided
-                interface_target_port = data.get('target_port')
+                interface_target_port = data.get("target_port")
                 if interface_target_port is None or interface_target_port == "":
-                    return web.json_response({
-                        "message": "Target Port is required",
-                    }, status=422)
+                    return web.json_response(
+                        {
+                            "message": "Target Port is required",
+                        },
+                        status=422,
+                    )
 
                 # set required TCPClientInterface options
                 interface_details["target_host"] = interface_target_host
@@ -719,25 +847,30 @@ class ReticulumMeshChat:
 
             # handle I2P interface
             if interface_type == "I2PInterface":
-                interface_details['connectable'] = "True"
+                interface_details["connectable"] = "True"
                 InterfaceEditor.update_value(interface_details, data, "peers")
 
             # handle tcp server interface
             if interface_type == "TCPServerInterface":
-
                 # ensure listen ip provided
-                interface_listen_ip = data.get('listen_ip')
+                interface_listen_ip = data.get("listen_ip")
                 if interface_listen_ip is None or interface_listen_ip == "":
-                    return web.json_response({
-                        "message": "Listen IP is required",
-                    }, status=422)
+                    return web.json_response(
+                        {
+                            "message": "Listen IP is required",
+                        },
+                        status=422,
+                    )
 
                 # ensure listen port provided
-                interface_listen_port = data.get('listen_port')
+                interface_listen_port = data.get("listen_port")
                 if interface_listen_port is None or interface_listen_port == "":
-                    return web.json_response({
-                        "message": "Listen Port is required",
-                    }, status=422)
+                    return web.json_response(
+                        {
+                            "message": "Listen Port is required",
+                        },
+                        status=422,
+                    )
 
                 # set required TCPServerInterface options
                 interface_details["listen_ip"] = interface_listen_ip
@@ -749,34 +882,45 @@ class ReticulumMeshChat:
 
             # handle udp interface
             if interface_type == "UDPInterface":
-
                 # ensure listen ip provided
-                interface_listen_ip = data.get('listen_ip')
+                interface_listen_ip = data.get("listen_ip")
                 if interface_listen_ip is None or interface_listen_ip == "":
-                    return web.json_response({
-                        "message": "Listen IP is required",
-                    }, status=422)
+                    return web.json_response(
+                        {
+                            "message": "Listen IP is required",
+                        },
+                        status=422,
+                    )
 
                 # ensure listen port provided
-                interface_listen_port = data.get('listen_port')
+                interface_listen_port = data.get("listen_port")
                 if interface_listen_port is None or interface_listen_port == "":
-                    return web.json_response({
-                        "message": "Listen Port is required",
-                    }, status=422)
+                    return web.json_response(
+                        {
+                            "message": "Listen Port is required",
+                        },
+                        status=422,
+                    )
 
                 # ensure forward ip provided
-                interface_forward_ip = data.get('forward_ip')
+                interface_forward_ip = data.get("forward_ip")
                 if interface_forward_ip is None or interface_forward_ip == "":
-                    return web.json_response({
-                        "message": "Forward IP is required",
-                    }, status=422)
+                    return web.json_response(
+                        {
+                            "message": "Forward IP is required",
+                        },
+                        status=422,
+                    )
 
                 # ensure forward port provided
-                interface_forward_port = data.get('forward_port')
+                interface_forward_port = data.get("forward_port")
                 if interface_forward_port is None or interface_forward_port == "":
-                    return web.json_response({
-                        "message": "Forward Port is required",
-                    }, status=422)
+                    return web.json_response(
+                        {
+                            "message": "Forward Port is required",
+                        },
+                        status=422,
+                    )
 
                 # set required UDPInterface options
                 interface_details["listen_ip"] = interface_listen_ip
@@ -789,48 +933,65 @@ class ReticulumMeshChat:
 
             # handle RNodeInterface
             if interface_type == "RNodeInterface":
-
                 # ensure port provided
-                interface_port = data.get('port')
+                interface_port = data.get("port")
                 if interface_port is None or interface_port == "":
-                    return web.json_response({
-                        "message": "Port is required",
-                    }, status=422)
+                    return web.json_response(
+                        {
+                            "message": "Port is required",
+                        },
+                        status=422,
+                    )
 
                 # ensure frequency provided
-                interface_frequency = data.get('frequency')
+                interface_frequency = data.get("frequency")
                 if interface_frequency is None or interface_frequency == "":
-                    return web.json_response({
-                        "message": "Frequency is required",
-                    }, status=422)
+                    return web.json_response(
+                        {
+                            "message": "Frequency is required",
+                        },
+                        status=422,
+                    )
 
                 # ensure bandwidth provided
-                interface_bandwidth = data.get('bandwidth')
+                interface_bandwidth = data.get("bandwidth")
                 if interface_bandwidth is None or interface_bandwidth == "":
-                    return web.json_response({
-                        "message": "Bandwidth is required",
-                    }, status=422)
+                    return web.json_response(
+                        {
+                            "message": "Bandwidth is required",
+                        },
+                        status=422,
+                    )
 
                 # ensure txpower provided
-                interface_txpower = data.get('txpower')
+                interface_txpower = data.get("txpower")
                 if interface_txpower is None or interface_txpower == "":
-                    return web.json_response({
-                        "message": "TX power is required",
-                    }, status=422)
+                    return web.json_response(
+                        {
+                            "message": "TX power is required",
+                        },
+                        status=422,
+                    )
 
                 # ensure spreading factor provided
-                interface_spreadingfactor = data.get('spreadingfactor')
+                interface_spreadingfactor = data.get("spreadingfactor")
                 if interface_spreadingfactor is None or interface_spreadingfactor == "":
-                    return web.json_response({
-                        "message": "Spreading Factor is required",
-                    }, status=422)
+                    return web.json_response(
+                        {
+                            "message": "Spreading Factor is required",
+                        },
+                        status=422,
+                    )
 
                 # ensure coding rate provided
-                interface_codingrate = data.get('codingrate')
+                interface_codingrate = data.get("codingrate")
                 if interface_codingrate is None or interface_codingrate == "":
-                    return web.json_response({
-                        "message": "Coding Rate is required",
-                    }, status=422)
+                    return web.json_response(
+                        {
+                            "message": "Coding Rate is required",
+                        },
+                        status=422,
+                    )
 
                 # set required RNodeInterface options
                 interface_details["port"] = interface_port
@@ -843,27 +1004,36 @@ class ReticulumMeshChat:
                 # set optional RNodeInterface options
                 InterfaceEditor.update_value(interface_details, data, "callsign")
                 InterfaceEditor.update_value(interface_details, data, "id_interval")
-                InterfaceEditor.update_value(interface_details, data, "airtime_limit_long")
-                InterfaceEditor.update_value(interface_details, data, "airtime_limit_short")
+                InterfaceEditor.update_value(
+                    interface_details, data, "airtime_limit_long",
+                )
+                InterfaceEditor.update_value(
+                    interface_details, data, "airtime_limit_short",
+                )
 
             # handle RNodeMultiInterface
             if interface_type == "RNodeMultiInterface":
-
                 # required settings
                 interface_port = data.get("port")
                 sub_interfaces = data.get("sub_interfaces", [])
 
                 # ensure port provided
                 if interface_port is None or interface_port == "":
-                    return web.json_response({
-                        "message": "Port is required",
-                    }, status=422)
+                    return web.json_response(
+                        {
+                            "message": "Port is required",
+                        },
+                        status=422,
+                    )
 
                 # ensure sub interfaces provided
                 if not isinstance(sub_interfaces, list) or not sub_interfaces:
-                    return web.json_response({
-                        "message": "At least one sub-interface is required",
-                    }, status=422)
+                    return web.json_response(
+                        {
+                            "message": "At least one sub-interface is required",
+                        },
+                        status=422,
+                    )
 
                 # set required RNodeMultiInterface options
                 interface_details["port"] = interface_port
@@ -878,17 +1048,31 @@ class ReticulumMeshChat:
 
                 # process each provided sub interface
                 for idx, sub_interface in enumerate(sub_interfaces):
-
                     # ensure required fields for sub-interface provided
                     missing_fields = []
-                    required_subinterface_fields = ["name", "frequency", "bandwidth", "txpower", "spreadingfactor", "codingrate", "vport"]
+                    required_subinterface_fields = [
+                        "name",
+                        "frequency",
+                        "bandwidth",
+                        "txpower",
+                        "spreadingfactor",
+                        "codingrate",
+                        "vport",
+                    ]
                     for field in required_subinterface_fields:
-                        if field not in sub_interface or sub_interface.get(field) is None or sub_interface.get(field) == "":
+                        if (
+                            field not in sub_interface
+                            or sub_interface.get(field) is None
+                            or sub_interface.get(field) == ""
+                        ):
                             missing_fields.append(field)
                     if missing_fields:
-                        return web.json_response({
-                            "message": f"Sub-interface {idx + 1} is missing required field(s): {', '.join(missing_fields)}"
-                        }, status=422)
+                        return web.json_response(
+                            {
+                                "message": f"Sub-interface {idx + 1} is missing required field(s): {', '.join(missing_fields)}",
+                            },
+                            status=422,
+                        )
 
                     sub_interface_name = sub_interface.get("name")
                     interface_details[sub_interface_name] = {
@@ -904,14 +1088,20 @@ class ReticulumMeshChat:
                 interfaces[interface_name] = interface_details
 
             # handle SerialInterface, KISSInterface, and AX25KISSInterface
-            if interface_type == "SerialInterface" or interface_type == "KISSInterface" or interface_type == "AX25KISSInterface":
-
+            if (
+                interface_type == "SerialInterface"
+                or interface_type == "KISSInterface"
+                or interface_type == "AX25KISSInterface"
+            ):
                 # ensure port provided
-                interface_port = data.get('port')
+                interface_port = data.get("port")
                 if interface_port is None or interface_port == "":
-                    return web.json_response({
-                        "message": "Port is required",
-                    }, status=422)
+                    return web.json_response(
+                        {
+                            "message": "Port is required",
+                        },
+                        status=422,
+                    )
 
                 # set required options
                 interface_details["port"] = interface_port
@@ -923,8 +1113,10 @@ class ReticulumMeshChat:
                 InterfaceEditor.update_value(interface_details, data, "stopbits")
 
                 # Handle KISS and AX25KISS specific options
-                if interface_type == "KISSInterface" or interface_type == "AX25KISSInterface":
-
+                if (
+                    interface_type == "KISSInterface"
+                    or interface_type == "AX25KISSInterface"
+                ):
                     # set optional options
                     InterfaceEditor.update_value(interface_details, data, "preamble")
                     InterfaceEditor.update_value(interface_details, data, "txtail")
@@ -942,20 +1134,25 @@ class ReticulumMeshChat:
 
             # handle Pipe Interface
             if interface_type == "PipeInterface":
-
                 # ensure command provided
-                interface_command = data.get('command')
+                interface_command = data.get("command")
                 if interface_command is None or interface_command == "":
-                    return web.json_response({
-                        "message": "Command is required",
-                    }, status=422)
+                    return web.json_response(
+                        {
+                            "message": "Command is required",
+                        },
+                        status=422,
+                    )
 
                 # ensure command provided
-                interface_respawn_delay = data.get('respawn_delay')
+                interface_respawn_delay = data.get("respawn_delay")
                 if interface_respawn_delay is None or interface_respawn_delay == "":
-                    return web.json_response({
-                        "message": "Respawn delay is required",
-                    }, status=422)
+                    return web.json_response(
+                        {
+                            "message": "Respawn delay is required",
+                        },
+                        status=422,
+                    )
 
                 # set required options
                 interface_details["command"] = interface_command
@@ -972,29 +1169,34 @@ class ReticulumMeshChat:
             interfaces[interface_name] = interface_details
             # save config
             if not self._write_reticulum_config():
-                return web.json_response({
-                    "message": "Failed to write Reticulum config",
-                }, status=500)
+                return web.json_response(
+                    {
+                        "message": "Failed to write Reticulum config",
+                    },
+                    status=500,
+                )
 
             if allow_overwriting_interface:
-                return web.json_response({
-                    "message": "Interface has been saved. Please restart MeshChat for these changes to take effect.",
-                })
-            else:
-                return web.json_response({
+                return web.json_response(
+                    {
+                        "message": "Interface has been saved. Please restart MeshChat for these changes to take effect.",
+                    },
+                )
+            return web.json_response(
+                {
                     "message": "Interface has been added. Please restart MeshChat for these changes to take effect.",
-                })
-        
+                },
+            )
+
         # export interfaces
         @routes.post("/api/v1/reticulum/interfaces/export")
         async def export_interfaces(request):
             try:
-
                 # get request data
                 selected_interface_names = None
                 try:
                     data = await request.json()
-                    selected_interface_names = data.get('selected_interface_names')
+                    selected_interface_names = data.get("selected_interface_names")
                 except:
                     # request data was not json, but we don't care
                     pass
@@ -1003,9 +1205,11 @@ class ReticulumMeshChat:
                 output = []
                 interfaces = self._get_interfaces_snapshot()
                 for interface_name, interface in interfaces.items():
-
                     # skip interface if not selected
-                    if selected_interface_names is not None and selected_interface_names != "":
+                    if (
+                        selected_interface_names is not None
+                        and selected_interface_names != ""
+                    ):
                         if interface_name not in selected_interface_names:
                             continue
 
@@ -1027,50 +1231,55 @@ class ReticulumMeshChat:
                                     output.append(f"      {sub_key} = {sub_value}")
                                 output.append("")
 
-
                 return web.Response(
                     text="\n".join(output),
                     content_type="text/plain",
                     headers={
-                        "Content-Disposition": "attachment; filename=meshchat_interfaces"
-                    }
+                        "Content-Disposition": "attachment; filename=meshchat_interfaces",
+                    },
                 )
 
             except Exception as e:
-                return web.json_response({
-                    "message": f"Failed to export interfaces: {str(e)}"
-                }, status=500)
+                return web.json_response(
+                    {
+                        "message": f"Failed to export interfaces: {e!s}",
+                    },
+                    status=500,
+                )
 
         # preview importable interfaces
         @routes.post("/api/v1/reticulum/interfaces/import-preview")
         async def import_interfaces_preview(request):
             try:
-
                 # get request data
                 data = await request.json()
-                config = data.get('config')
+                config = data.get("config")
 
                 # parse interfaces from config
                 interfaces = InterfaceConfigParser.parse(config)
-                    
-                return web.json_response({
-                    "interfaces": interfaces
-                })
-                
+
+                return web.json_response(
+                    {
+                        "interfaces": interfaces,
+                    },
+                )
+
             except Exception as e:
-                return web.json_response({
-                    "message": f"Failed to parse config file: {str(e)}"
-                }, status=500)
+                return web.json_response(
+                    {
+                        "message": f"Failed to parse config file: {e!s}",
+                    },
+                    status=500,
+                )
 
         # import interfaces from config
         @routes.post("/api/v1/reticulum/interfaces/import")
         async def import_interfaces(request):
             try:
-
                 # get request data
                 data = await request.json()
-                config = data.get('config')
-                selected_interface_names = data.get('selected_interface_names')
+                config = data.get("config")
+                selected_interface_names = data.get("selected_interface_names")
 
                 # parse interfaces from config
                 interfaces = InterfaceConfigParser.parse(config)
@@ -1084,7 +1293,6 @@ class ReticulumMeshChat:
                 # convert interfaces to object
                 interface_config = {}
                 for interface in selected_interfaces:
-
                     # add interface and keys/values
                     interface_name = interface["name"]
                     interface_config[interface_name] = {}
@@ -1105,23 +1313,30 @@ class ReticulumMeshChat:
                 interfaces = self._get_interfaces_section()
                 interfaces.update(interface_config)
                 if not self._write_reticulum_config():
-                    return web.json_response({
-                        "message": "Failed to write Reticulum config",
-                    }, status=500)
+                    return web.json_response(
+                        {
+                            "message": "Failed to write Reticulum config",
+                        },
+                        status=500,
+                    )
 
-                return web.json_response({
-                    "message": "Interfaces imported successfully",
-                })
-                
+                return web.json_response(
+                    {
+                        "message": "Interfaces imported successfully",
+                    },
+                )
+
             except Exception as e:
-                return web.json_response({
-                    "message": f"Failed to import interfaces: {str(e)}"
-                }, status=500)
+                return web.json_response(
+                    {
+                        "message": f"Failed to import interfaces: {e!s}",
+                    },
+                    status=500,
+                )
 
         # handle websocket clients
         @routes.get("/ws")
         async def ws(request):
-
             # prepare websocket response
             websocket_response = web.WebSocketResponse(
                 # set max message size accepted by server to 50 megabytes
@@ -1148,7 +1363,7 @@ class ReticulumMeshChat:
                         print(e)
                 elif msg.type == WSMsgType.ERROR:
                     # ignore errors while handling message
-                    print('ws connection error %s' % websocket_response.exception())
+                    print("ws connection error %s" % websocket_response.exception())
 
             # websocket closed
             self.websocket_clients.remove(websocket_response)
@@ -1171,12 +1386,20 @@ class ReticulumMeshChat:
 
             # Calculate announce rates
             current_time = time.time()
-            announces_per_second = len([t for t in self.announce_timestamps if current_time - t <= 1.0])
-            announces_per_minute = len([t for t in self.announce_timestamps if current_time - t <= 60.0])
-            announces_per_hour = len([t for t in self.announce_timestamps if current_time - t <= 3600.0])
+            announces_per_second = len(
+                [t for t in self.announce_timestamps if current_time - t <= 1.0],
+            )
+            announces_per_minute = len(
+                [t for t in self.announce_timestamps if current_time - t <= 60.0],
+            )
+            announces_per_hour = len(
+                [t for t in self.announce_timestamps if current_time - t <= 3600.0],
+            )
 
             # Clean up old announce timestamps (older than 1 hour)
-            self.announce_timestamps = [t for t in self.announce_timestamps if current_time - t <= 3600.0]
+            self.announce_timestamps = [
+                t for t in self.announce_timestamps if current_time - t <= 3600.0
+            ]
 
             # Calculate average download speed
             avg_download_speed_bps = None
@@ -1186,132 +1409,148 @@ class ReticulumMeshChat:
                 if total_duration > 0:
                     avg_download_speed_bps = total_bytes / total_duration
 
-            return web.json_response({
-                "app_info": {
-                    "version": self.get_app_version(),
-                    "lxmf_version": LXMF.__version__,
-                    "rns_version": RNS.__version__,
-                    "python_version": platform.python_version(),
-                    "storage_path": self.storage_path,
-                    "database_path": self.database_path,
-                    "database_file_size": os.path.getsize(self.database_path),
-                    "reticulum_config_path": self.reticulum.configpath,
-                    "is_connected_to_shared_instance": self.reticulum.is_connected_to_shared_instance,
-                    "is_transport_enabled": self.reticulum.transport_enabled(),
-                    "memory_usage": {
-                        "rss": memory_info.rss,  # Resident Set Size (bytes)
-                        "vms": memory_info.vms,  # Virtual Memory Size (bytes)
+            return web.json_response(
+                {
+                    "app_info": {
+                        "version": self.get_app_version(),
+                        "lxmf_version": LXMF.__version__,
+                        "rns_version": RNS.__version__,
+                        "python_version": platform.python_version(),
+                        "storage_path": self.storage_path,
+                        "database_path": self.database_path,
+                        "database_file_size": os.path.getsize(self.database_path),
+                        "reticulum_config_path": self.reticulum.configpath,
+                        "is_connected_to_shared_instance": self.reticulum.is_connected_to_shared_instance,
+                        "is_transport_enabled": self.reticulum.transport_enabled(),
+                        "memory_usage": {
+                            "rss": memory_info.rss,  # Resident Set Size (bytes)
+                            "vms": memory_info.vms,  # Virtual Memory Size (bytes)
+                        },
+                        "network_stats": {
+                            "bytes_sent": net_io.bytes_sent,
+                            "bytes_recv": net_io.bytes_recv,
+                            "packets_sent": net_io.packets_sent,
+                            "packets_recv": net_io.packets_recv,
+                        },
+                        "reticulum_stats": {
+                            "total_paths": total_paths,
+                            "announces_per_second": announces_per_second,
+                            "announces_per_minute": announces_per_minute,
+                            "announces_per_hour": announces_per_hour,
+                        },
+                        "download_stats": {
+                            "avg_download_speed_bps": avg_download_speed_bps,
+                        },
+                        "user_guidance": self.build_user_guidance_messages(),
                     },
-                    "network_stats": {
-                        "bytes_sent": net_io.bytes_sent,
-                        "bytes_recv": net_io.bytes_recv,
-                        "packets_sent": net_io.packets_sent,
-                        "packets_recv": net_io.packets_recv,
-                    },
-                    "reticulum_stats": {
-                        "total_paths": total_paths,
-                        "announces_per_second": announces_per_second,
-                        "announces_per_minute": announces_per_minute,
-                        "announces_per_hour": announces_per_hour,
-                    },
-                    "download_stats": {
-                        "avg_download_speed_bps": avg_download_speed_bps,
-                    },
-                    "user_guidance": self.build_user_guidance_messages(),
                 },
-            })
+            )
 
         # get config
         @routes.get("/api/v1/config")
         async def index(request):
-            return web.json_response({
-                "config": self.get_config_dict(),
-            })
+            return web.json_response(
+                {
+                    "config": self.get_config_dict(),
+                },
+            )
 
         # update config
         @routes.patch("/api/v1/config")
         async def index(request):
-
             # get request body as json
             data = await request.json()
 
             # update config
             await self.update_config(data)
 
-            return web.json_response({
-                "config": self.get_config_dict(),
-            })
+            return web.json_response(
+                {
+                    "config": self.get_config_dict(),
+                },
+            )
 
         # enable transport mode
         @routes.post("/api/v1/reticulum/enable-transport")
         async def index(request):
-
             # enable transport mode
             reticulum_config = self._get_reticulum_section()
             reticulum_config["enable_transport"] = True
             if not self._write_reticulum_config():
-                return web.json_response({
-                    "message": "Failed to write Reticulum config",
-                }, status=500)
+                return web.json_response(
+                    {
+                        "message": "Failed to write Reticulum config",
+                    },
+                    status=500,
+                )
 
-            return web.json_response({
-                "message": "Transport has been enabled. MeshChat must be restarted for this change to take effect.",
-            })
+            return web.json_response(
+                {
+                    "message": "Transport has been enabled. MeshChat must be restarted for this change to take effect.",
+                },
+            )
 
         # disable transport mode
         @routes.post("/api/v1/reticulum/disable-transport")
         async def index(request):
-
             # disable transport mode
             reticulum_config = self._get_reticulum_section()
             reticulum_config["enable_transport"] = False
             if not self._write_reticulum_config():
-                return web.json_response({
-                    "message": "Failed to write Reticulum config",
-                }, status=500)
+                return web.json_response(
+                    {
+                        "message": "Failed to write Reticulum config",
+                    },
+                    status=500,
+                )
 
-            return web.json_response({
-                "message": "Transport has been disabled. MeshChat must be restarted for this change to take effect.",
-            })
+            return web.json_response(
+                {
+                    "message": "Transport has been disabled. MeshChat must be restarted for this change to take effect.",
+                },
+            )
 
         # get calls
         @routes.get("/api/v1/calls")
         async def index(request):
-
             # get audio calls
             audio_calls = []
             for audio_call in self.audio_call_manager.audio_calls:
                 audio_calls.append(self.convert_audio_call_to_dict(audio_call))
 
-            return web.json_response({
-                "audio_calls": audio_calls,
-            })
+            return web.json_response(
+                {
+                    "audio_calls": audio_calls,
+                },
+            )
 
         # clear call history
         @routes.post("/api/v1/calls/clear-call-history")
         async def index(request):
-
             # delete inactive calls, which are classed as call history
             for audio_call in self.audio_call_manager.audio_calls:
                 if audio_call.is_active() is False:
                     self.audio_call_manager.delete_audio_call(audio_call)
 
-            return web.json_response({
-                "message": "Call history has been cleared",
-            })
+            return web.json_response(
+                {
+                    "message": "Call history has been cleared",
+                },
+            )
 
         # hangup all calls
         @routes.get("/api/v1/calls/hangup-all")
         async def index(request):
             self.audio_call_manager.hangup_all()
-            return web.json_response({
-                "message": "All calls have been hungup",
-            })
+            return web.json_response(
+                {
+                    "message": "All calls have been hungup",
+                },
+            )
 
         # get call
         @routes.get("/api/v1/calls/{audio_call_link_hash}")
         async def index(request):
-
             # get path params
             audio_call_link_hash = request.match_info.get("audio_call_link_hash", "")
 
@@ -1319,20 +1558,26 @@ class ReticulumMeshChat:
             audio_call_link_hash = bytes.fromhex(audio_call_link_hash)
 
             # find audio call
-            audio_call = self.audio_call_manager.find_audio_call_by_link_hash(audio_call_link_hash)
+            audio_call = self.audio_call_manager.find_audio_call_by_link_hash(
+                audio_call_link_hash,
+            )
             if audio_call is None:
-                return web.json_response({
-                    "message": "audio call not found",
-                }, status=404)
+                return web.json_response(
+                    {
+                        "message": "audio call not found",
+                    },
+                    status=404,
+                )
 
-            return web.json_response({
-                "audio_call": self.convert_audio_call_to_dict(audio_call),
-            })
+            return web.json_response(
+                {
+                    "audio_call": self.convert_audio_call_to_dict(audio_call),
+                },
+            )
 
         # delete call
         @routes.delete("/api/v1/calls/{audio_call_link_hash}")
         async def index(request):
-
             # get path params
             audio_call_link_hash = request.match_info.get("audio_call_link_hash", "")
 
@@ -1342,14 +1587,15 @@ class ReticulumMeshChat:
             # delete audio call
             self.audio_call_manager.delete_audio_call_by_link_hash(audio_call_link_hash)
 
-            return web.json_response({
-                "message": "audio call deleted",
-            })
+            return web.json_response(
+                {
+                    "message": "audio call deleted",
+                },
+            )
 
         # initiate a call to the provided destination
         @routes.get("/api/v1/calls/initiate/{destination_hash}")
         async def index(request):
-
             # get path params
             destination_hash = request.match_info.get("destination_hash", "")
             timeout_seconds = int(request.query.get("timeout", 15))
@@ -1359,22 +1605,26 @@ class ReticulumMeshChat:
 
             # initiate audio call
             try:
-
-                audio_call = await self.audio_call_manager.initiate(destination_hash, timeout_seconds)
-                return web.json_response({
-                    "audio_call": self.convert_audio_call_to_dict(audio_call),
-                })
+                audio_call = await self.audio_call_manager.initiate(
+                    destination_hash, timeout_seconds,
+                )
+                return web.json_response(
+                    {
+                        "audio_call": self.convert_audio_call_to_dict(audio_call),
+                    },
+                )
 
             except Exception as e:
-
-                return web.json_response({
-                    "message": "Call Failed: {}".format(str(e)),
-                }, status=503)
+                return web.json_response(
+                    {
+                        "message": f"Call Failed: {e!s}",
+                    },
+                    status=503,
+                )
 
         # handle websocket client for sending and receiving audio packets in a call
         @routes.get("/api/v1/calls/{audio_call_link_hash}/audio")
         async def ws(request):
-
             # get path params
             audio_call_link_hash = request.match_info.get("audio_call_link_hash", "")
 
@@ -1382,12 +1632,17 @@ class ReticulumMeshChat:
             audio_call_link_hash = bytes.fromhex(audio_call_link_hash)
 
             # find audio call, this will be null until the link is established
-            audio_call = self.audio_call_manager.find_audio_call_by_link_hash(audio_call_link_hash)
+            audio_call = self.audio_call_manager.find_audio_call_by_link_hash(
+                audio_call_link_hash,
+            )
             if audio_call is None:
                 # fixme: web browser expects websocket, so this won't be useful
-                return web.json_response({
-                    "message": "audio call not found",
-                }, status=404)
+                return web.json_response(
+                    {
+                        "message": "audio call not found",
+                    },
+                    status=404,
+                )
 
             # send audio received from call initiator to call receiver websocket
             def on_audio_packet(data):
@@ -1402,7 +1657,9 @@ class ReticulumMeshChat:
             def on_hangup():
                 if websocket_response.closed is False:
                     try:
-                        AsyncUtils.run_async(websocket_response.close(code=WSCloseCode.GOING_AWAY))
+                        AsyncUtils.run_async(
+                            websocket_response.close(code=WSCloseCode.GOING_AWAY),
+                        )
                     except:
                         # ignore errors closing websocket
                         pass
@@ -1428,7 +1685,7 @@ class ReticulumMeshChat:
                         print(e)
                 elif msg.type == WSMsgType.ERROR:
                     # ignore errors while handling message
-                    print('ws connection error %s' % websocket_response.exception())
+                    print("ws connection error %s" % websocket_response.exception())
 
             # unregister audio packet handler now that the websocket has been closed
             audio_call.register_audio_packet_listener(on_audio_packet)
@@ -1438,7 +1695,6 @@ class ReticulumMeshChat:
         # hangup calls
         @routes.get("/api/v1/calls/{audio_call_link_hash}/hangup")
         async def index(request):
-
             # get path params
             audio_call_link_hash = request.match_info.get("audio_call_link_hash", "")
 
@@ -1446,33 +1702,40 @@ class ReticulumMeshChat:
             audio_call_link_hash = bytes.fromhex(audio_call_link_hash)
 
             # find audio call
-            audio_call = self.audio_call_manager.find_audio_call_by_link_hash(audio_call_link_hash)
+            audio_call = self.audio_call_manager.find_audio_call_by_link_hash(
+                audio_call_link_hash,
+            )
             if audio_call is None:
-                return web.json_response({
-                    "message": "audio call not found",
-                }, status=404)
+                return web.json_response(
+                    {
+                        "message": "audio call not found",
+                    },
+                    status=404,
+                )
 
             # hangup the call
             audio_call.hangup()
 
-            return web.json_response({
-                "message": "Call has been hungup",
-            })
+            return web.json_response(
+                {
+                    "message": "Call has been hungup",
+                },
+            )
 
         # announce
         @routes.get("/api/v1/announce")
         async def index(request):
-
             await self.announce()
 
-            return web.json_response({
-                "message": "announcing",
-            })
+            return web.json_response(
+                {
+                    "message": "announcing",
+                },
+            )
 
         # serve announces
         @routes.get("/api/v1/announces")
         async def index(request):
-
             # get query params
             aspect = request.query.get("aspect", None)
             identity_hash = request.query.get("identity_hash", None)
@@ -1492,7 +1755,9 @@ class ReticulumMeshChat:
 
             # filter by provided destination hash
             if destination_hash is not None:
-                query = query.where(database.Announce.destination_hash == destination_hash)
+                query = query.where(
+                    database.Announce.destination_hash == destination_hash,
+                )
 
             # limit results
             if limit is not None:
@@ -1506,14 +1771,15 @@ class ReticulumMeshChat:
             for announce in query_results:
                 announces.append(self.convert_db_announce_to_dict(announce))
 
-            return web.json_response({
-                "announces": announces,
-            })
+            return web.json_response(
+                {
+                    "announces": announces,
+                },
+            )
 
         # serve favourites
         @routes.get("/api/v1/favourites")
         async def index(request):
-
             # get query params
             aspect = request.query.get("aspect", None)
 
@@ -1525,21 +1791,24 @@ class ReticulumMeshChat:
                 query = query.where(database.FavouriteDestination.aspect == aspect)
 
             # order favourites alphabetically
-            query_results = query.order_by(database.FavouriteDestination.display_name.asc())
+            query_results = query.order_by(
+                database.FavouriteDestination.display_name.asc(),
+            )
 
             # process favourites
             favourites = []
             for favourite in query_results:
                 favourites.append(self.convert_db_favourite_to_dict(favourite))
 
-            return web.json_response({
-                "favourites": favourites,
-            })
+            return web.json_response(
+                {
+                    "favourites": favourites,
+                },
+            )
 
         # add favourite
         @routes.post("/api/v1/favourites/add")
         async def index(request):
-
             # get request data
             data = await request.json()
             destination_hash = data.get("destination_hash", None)
@@ -1548,32 +1817,42 @@ class ReticulumMeshChat:
 
             # destination hash is required
             if destination_hash is None:
-                return web.json_response({
-                    "message": "destination_hash is required",
-                }, status=422)
+                return web.json_response(
+                    {
+                        "message": "destination_hash is required",
+                    },
+                    status=422,
+                )
 
             # display name is required
             if display_name is None:
-                return web.json_response({
-                    "message": "display_name is required",
-                }, status=422)
+                return web.json_response(
+                    {
+                        "message": "display_name is required",
+                    },
+                    status=422,
+                )
 
             # aspect is required
             if aspect is None:
-                return web.json_response({
-                    "message": "aspect is required",
-                }, status=422)
+                return web.json_response(
+                    {
+                        "message": "aspect is required",
+                    },
+                    status=422,
+                )
 
             # upsert favourite
             self.db_upsert_favourite(destination_hash, display_name, aspect)
-            return web.json_response({
-                "message": "Favourite has been added!",
-            })
+            return web.json_response(
+                {
+                    "message": "Favourite has been added!",
+                },
+            )
 
         # rename favourite
         @routes.post("/api/v1/favourites/{destination_hash}/rename")
         async def index(request):
-
             # get path params
             destination_hash = request.match_info.get("destination_hash", "")
 
@@ -1583,72 +1862,90 @@ class ReticulumMeshChat:
 
             # update display name if provided
             if len(display_name) > 0:
-                database.FavouriteDestination.update(display_name=display_name).where(database.FavouriteDestination.destination_hash == destination_hash).execute()
+                database.FavouriteDestination.update(display_name=display_name).where(
+                    database.FavouriteDestination.destination_hash == destination_hash,
+                ).execute()
 
-            return web.json_response({
-                "message": "Favourite has been renamed",
-            })
+            return web.json_response(
+                {
+                    "message": "Favourite has been renamed",
+                },
+            )
 
         # delete favourite
         @routes.delete("/api/v1/favourites/{destination_hash}")
         async def index(request):
-
             # get path params
             destination_hash = request.match_info.get("destination_hash", "")
 
             # delete favourite
-            database.FavouriteDestination.delete().where(database.FavouriteDestination.destination_hash == destination_hash).execute()
-            return web.json_response({
-                "message": "Favourite has been added!",
-            })
+            database.FavouriteDestination.delete().where(
+                database.FavouriteDestination.destination_hash == destination_hash,
+            ).execute()
+            return web.json_response(
+                {
+                    "message": "Favourite has been added!",
+                },
+            )
 
         # propagation node status
         @routes.get("/api/v1/lxmf/propagation-node/status")
         async def index(request):
-            return web.json_response({
-                "propagation_node_status": {
-                    "state": self.convert_propagation_node_state_to_string(self.message_router.propagation_transfer_state),
-                    "progress": self.message_router.propagation_transfer_progress * 100,  # convert to percentage
-                    "messages_received": self.message_router.propagation_transfer_last_result,
+            return web.json_response(
+                {
+                    "propagation_node_status": {
+                        "state": self.convert_propagation_node_state_to_string(
+                            self.message_router.propagation_transfer_state,
+                        ),
+                        "progress": self.message_router.propagation_transfer_progress
+                        * 100,  # convert to percentage
+                        "messages_received": self.message_router.propagation_transfer_last_result,
+                    },
                 },
-            })
+            )
 
         # sync propagation node
         @routes.get("/api/v1/lxmf/propagation-node/sync")
         async def index(request):
-
             # ensure propagation node is configured before attempting to sync
             if self.message_router.get_outbound_propagation_node() is None:
-                return web.json_response({
-                    "message": "A propagation node must be configured to sync messages.",
-                }, status=400)
+                return web.json_response(
+                    {
+                        "message": "A propagation node must be configured to sync messages.",
+                    },
+                    status=400,
+                )
 
             # request messages from propagation node
             await self.sync_propagation_nodes()
 
-            return web.json_response({
-                "message": "Sync is starting",
-            })
+            return web.json_response(
+                {
+                    "message": "Sync is starting",
+                },
+            )
 
         # stop syncing propagation node
         @routes.get("/api/v1/lxmf/propagation-node/stop-sync")
         async def index(request):
-
             self.stop_propagation_node_sync()
 
-            return web.json_response({
-                "message": "Sync is stopping",
-            })
+            return web.json_response(
+                {
+                    "message": "Sync is stopping",
+                },
+            )
 
         # serve propagation nodes
         @routes.get("/api/v1/lxmf/propagation-nodes")
         async def index(request):
-
             # get query params
             limit = request.query.get("limit", None)
 
             # get lxmf.propagation announces
-            query = database.Announce.select().where(database.Announce.aspect == "lxmf.propagation")
+            query = database.Announce.select().where(
+                database.Announce.aspect == "lxmf.propagation",
+            )
 
             # limit results
             if limit is not None:
@@ -1660,52 +1957,70 @@ class ReticulumMeshChat:
             # process announces
             lxmf_propagation_nodes = []
             for announce in query_results:
-
                 # find an lxmf.delivery announce for the same identity hash, so we can use that as an "operater by" name
-                lxmf_delivery_announce = (database.Announce.select()
-                                          .where(database.Announce.aspect == "lxmf.delivery")
-                                          .where(database.Announce.identity_hash == announce.identity_hash)
-                                          .get_or_none())
+                lxmf_delivery_announce = (
+                    database.Announce.select()
+                    .where(database.Announce.aspect == "lxmf.delivery")
+                    .where(database.Announce.identity_hash == announce.identity_hash)
+                    .get_or_none()
+                )
 
                 # find a nomadnetwork.node announce for the same identity hash, so we can use that as an "operated by" name
-                nomadnetwork_node_announce = (database.Announce.select()
-                                          .where(database.Announce.aspect == "nomadnetwork.node")
-                                          .where(database.Announce.identity_hash == announce.identity_hash)
-                                          .get_or_none())
+                nomadnetwork_node_announce = (
+                    database.Announce.select()
+                    .where(database.Announce.aspect == "nomadnetwork.node")
+                    .where(database.Announce.identity_hash == announce.identity_hash)
+                    .get_or_none()
+                )
 
                 # get a display name from other announces belonging to the propagation nodes identity
                 operator_display_name = None
-                if lxmf_delivery_announce is not None and lxmf_delivery_announce.app_data is not None:
-                    operator_display_name = self.parse_lxmf_display_name(lxmf_delivery_announce.app_data, None)
-                elif nomadnetwork_node_announce is not None and nomadnetwork_node_announce.app_data is not None:
-                    operator_display_name = self.parse_nomadnetwork_node_display_name(nomadnetwork_node_announce.app_data, None)
+                if (
+                    lxmf_delivery_announce is not None
+                    and lxmf_delivery_announce.app_data is not None
+                ):
+                    operator_display_name = self.parse_lxmf_display_name(
+                        lxmf_delivery_announce.app_data, None,
+                    )
+                elif (
+                    nomadnetwork_node_announce is not None
+                    and nomadnetwork_node_announce.app_data is not None
+                ):
+                    operator_display_name = self.parse_nomadnetwork_node_display_name(
+                        nomadnetwork_node_announce.app_data, None,
+                    )
 
                 # parse app_data so we can see if propagation is enabled or disabled for this node
                 is_propagation_enabled = None
                 per_transfer_limit = None
-                propagation_node_data = self.parse_lxmf_propagation_node_app_data(announce.app_data)
+                propagation_node_data = self.parse_lxmf_propagation_node_app_data(
+                    announce.app_data,
+                )
                 if propagation_node_data is not None:
                     is_propagation_enabled = propagation_node_data["enabled"]
                     per_transfer_limit = propagation_node_data["per_transfer_limit"]
 
-                lxmf_propagation_nodes.append({
-                    "destination_hash": announce.destination_hash,
-                    "identity_hash": announce.identity_hash,
-                    "operator_display_name": operator_display_name,
-                    "is_propagation_enabled": is_propagation_enabled,
-                    "per_transfer_limit": per_transfer_limit,
-                    "created_at": announce.created_at,
-                    "updated_at": announce.updated_at,
-                })
+                lxmf_propagation_nodes.append(
+                    {
+                        "destination_hash": announce.destination_hash,
+                        "identity_hash": announce.identity_hash,
+                        "operator_display_name": operator_display_name,
+                        "is_propagation_enabled": is_propagation_enabled,
+                        "per_transfer_limit": per_transfer_limit,
+                        "created_at": announce.created_at,
+                        "updated_at": announce.updated_at,
+                    },
+                )
 
-            return web.json_response({
-                "lxmf_propagation_nodes": lxmf_propagation_nodes,
-            })
+            return web.json_response(
+                {
+                    "lxmf_propagation_nodes": lxmf_propagation_nodes,
+                },
+            )
 
         # get path to destination
         @routes.get("/api/v1/destination/{destination_hash}/path")
         async def index(request):
-
             # get path params
             destination_hash = request.match_info.get("destination_hash", "")
 
@@ -1714,9 +2029,10 @@ class ReticulumMeshChat:
 
             # check if user wants to request the path from the network right now
             request_query_param = request.query.get("request", "false")
-            should_request_now = request_query_param == "true" or request_query_param == "1"
+            should_request_now = (
+                request_query_param == "true" or request_query_param == "1"
+            )
             if should_request_now:
-
                 # determine how long we should wait for a path response
                 timeout_seconds = int(request.query.get("timeout", 15))
                 timeout_after_seconds = time.time() + timeout_seconds
@@ -1726,14 +2042,19 @@ class ReticulumMeshChat:
                     RNS.Transport.request_path(destination_hash)
 
                 # wait until we have a path, or give up after the configured timeout
-                while not RNS.Transport.has_path(destination_hash) and time.time() < timeout_after_seconds:
+                while (
+                    not RNS.Transport.has_path(destination_hash)
+                    and time.time() < timeout_after_seconds
+                ):
                     await asyncio.sleep(0.1)
 
             # ensure path is known
             if not RNS.Transport.has_path(destination_hash):
-                return web.json_response({
-                    "path": None,
-                })
+                return web.json_response(
+                    {
+                        "path": None,
+                    },
+                )
 
             # determine next hop and hop count
             hops = RNS.Transport.hops_to(destination_hash)
@@ -1741,25 +2062,28 @@ class ReticulumMeshChat:
 
             # ensure next hop provided
             if next_hop_bytes is None:
-                return web.json_response({
-                    "path": None,
-                })
+                return web.json_response(
+                    {
+                        "path": None,
+                    },
+                )
 
             next_hop = next_hop_bytes.hex()
             next_hop_interface = self.reticulum.get_next_hop_if_name(destination_hash)
 
-            return web.json_response({
-                "path": {
-                    "hops": hops,
-                    "next_hop": next_hop,
-                    "next_hop_interface": next_hop_interface,
+            return web.json_response(
+                {
+                    "path": {
+                        "hops": hops,
+                        "next_hop": next_hop,
+                        "next_hop_interface": next_hop_interface,
+                    },
                 },
-            })
+            )
 
         # drop path to destination
         @routes.post("/api/v1/destination/{destination_hash}/drop-path")
         async def index(request):
-
             # get path params
             destination_hash = request.match_info.get("destination_hash", "")
 
@@ -1769,14 +2093,15 @@ class ReticulumMeshChat:
             # drop path
             self.reticulum.drop_path(destination_hash)
 
-            return web.json_response({
-                "message": "Path has been dropped",
-            })
+            return web.json_response(
+                {
+                    "message": "Path has been dropped",
+                },
+            )
 
         # get signal metrics for a destination by checking the latest announce or lxmf message received from them
         @routes.get("/api/v1/destination/{destination_hash}/signal-metrics")
         async def index(request):
-
             # get path params
             destination_hash = request.match_info.get("destination_hash", "")
 
@@ -1787,16 +2112,23 @@ class ReticulumMeshChat:
             updated_at = None
 
             # get latest announce from database for the provided destination hash
-            latest_announce = (database.Announce.select()
-                               .where(database.Announce.destination_hash == destination_hash)
-                               .get_or_none())
+            latest_announce = (
+                database.Announce.select()
+                .where(database.Announce.destination_hash == destination_hash)
+                .get_or_none()
+            )
 
             # get latest lxmf message from database sent to us from the provided destination hash
-            latest_lxmf_message = (database.LxmfMessage.select()
-                                   .where(database.LxmfMessage.destination_hash == self.local_lxmf_destination.hexhash)
-                                   .where(database.LxmfMessage.source_hash == destination_hash)
-                                   .order_by(database.LxmfMessage.id.desc())
-                                   .get_or_none())
+            latest_lxmf_message = (
+                database.LxmfMessage.select()
+                .where(
+                    database.LxmfMessage.destination_hash
+                    == self.local_lxmf_destination.hexhash,
+                )
+                .where(database.LxmfMessage.source_hash == destination_hash)
+                .order_by(database.LxmfMessage.id.desc())
+                .get_or_none()
+            )
 
             # determine when latest announce was received
             latest_announce_at = None
@@ -1806,7 +2138,9 @@ class ReticulumMeshChat:
             # determine when latest lxmf message was received
             latest_lxmf_message_at = None
             if latest_lxmf_message is not None:
-                latest_lxmf_message_at = datetime.fromisoformat(latest_lxmf_message.created_at)
+                latest_lxmf_message_at = datetime.fromisoformat(
+                    latest_lxmf_message.created_at,
+                )
 
             # get signal metrics from latest announce
             if latest_announce is not None:
@@ -1817,21 +2151,26 @@ class ReticulumMeshChat:
                 updated_at = latest_announce.updated_at
 
             # get signal metrics from latest lxmf message if it's more recent than the announce
-            if latest_lxmf_message is not None and (latest_announce_at is None or latest_lxmf_message_at > latest_announce_at):
+            if latest_lxmf_message is not None and (
+                latest_announce_at is None
+                or latest_lxmf_message_at > latest_announce_at
+            ):
                 snr = latest_lxmf_message.snr
                 rssi = latest_lxmf_message.rssi
                 quality = latest_lxmf_message.quality
                 # using created_at from lxmf message because this is when the message was received
                 updated_at = latest_lxmf_message.created_at
 
-            return web.json_response({
-                "signal_metrics": {
-                    "snr": snr,
-                    "rssi": rssi,
-                    "quality": quality,
-                    "updated_at": updated_at,
+            return web.json_response(
+                {
+                    "signal_metrics": {
+                        "snr": snr,
+                        "rssi": rssi,
+                        "quality": quality,
+                        "updated_at": updated_at,
+                    },
                 },
-            })
+            )
 
         # pings an lxmf.delivery destination by sending empty data and waiting for the recipient to send a proof back
         # the lxmf router proves all received packets, then drops them if they can't be decoded as lxmf messages
@@ -1840,7 +2179,6 @@ class ReticulumMeshChat:
         # https://github.com/markqvist/LXMF/blob/9ff76c0473e9d4107e079f266dd08144bb74c7c8/LXMF/LXMRouter.py#L1374
         @routes.get("/api/v1/ping/{destination_hash}/lxmf.delivery")
         async def index(request):
-
             # get path params
             destination_hash = request.match_info.get("destination_hash", "")
 
@@ -1856,15 +2194,21 @@ class ReticulumMeshChat:
                 RNS.Transport.request_path(destination_hash)
 
             # wait until we have a path, or give up after the configured timeout
-            while not RNS.Transport.has_path(destination_hash) and time.time() < timeout_after_seconds:
+            while (
+                not RNS.Transport.has_path(destination_hash)
+                and time.time() < timeout_after_seconds
+            ):
                 await asyncio.sleep(0.1)
 
             # find destination identity
             destination_identity = RNS.Identity.recall(destination_hash)
             if destination_identity is None:
-                return web.json_response({
-                    "message": "Ping failed. Could not find path to destination.",
-                }, status=503)
+                return web.json_response(
+                    {
+                        "message": "Ping failed. Could not find path to destination.",
+                    },
+                    status=503,
+                )
 
             # create outbound destination
             request_destination = RNS.Destination(
@@ -1880,14 +2224,20 @@ class ReticulumMeshChat:
             receipt = packet.send()
 
             # wait until delivered, or give up after time out
-            while receipt.status != RNS.PacketReceipt.DELIVERED and time.time() < timeout_after_seconds:
+            while (
+                receipt.status != RNS.PacketReceipt.DELIVERED
+                and time.time() < timeout_after_seconds
+            ):
                 await asyncio.sleep(0.1)
 
             # ping failed if not delivered
             if receipt.status != RNS.PacketReceipt.DELIVERED:
-                return web.json_response({
-                    "message": f"Ping failed. Timed out after {timeout_seconds} seconds.",
-                }, status=503)
+                return web.json_response(
+                    {
+                        "message": f"Ping failed. Timed out after {timeout_seconds} seconds.",
+                    },
+                    status=503,
+                )
 
             # get number of hops to destination and back from destination
             hops_there = RNS.Transport.hops_to(destination_hash)
@@ -1913,59 +2263,74 @@ class ReticulumMeshChat:
             rtt_milliseconds = round(rtt * 1000, 3)
             rtt_duration_string = f"{rtt_milliseconds} ms"
 
-            return web.json_response({
-                "message": f"Valid reply from {receipt.destination.hash.hex()}\nDuration: {rtt_duration_string}\nHops There: {hops_there}\nHops Back: {hops_back}",
-                "ping_result": {
-                    "rtt": rtt,
-                    "hops_there": hops_there,
-                    "hops_back": hops_back,
-                    "rssi": rssi,
-                    "snr": snr,
-                    "quality": quality,
-                    "receiving_interface": str(receipt.proof_packet.receiving_interface),
+            return web.json_response(
+                {
+                    "message": f"Valid reply from {receipt.destination.hash.hex()}\nDuration: {rtt_duration_string}\nHops There: {hops_there}\nHops Back: {hops_back}",
+                    "ping_result": {
+                        "rtt": rtt,
+                        "hops_there": hops_there,
+                        "hops_back": hops_back,
+                        "rssi": rssi,
+                        "snr": snr,
+                        "quality": quality,
+                        "receiving_interface": str(
+                            receipt.proof_packet.receiving_interface,
+                        ),
+                    },
                 },
-            })
+            )
 
         # get custom destination display name
         @routes.get("/api/v1/destination/{destination_hash}/custom-display-name")
         async def index(request):
-
             # get path params
             destination_hash = request.match_info.get("destination_hash", "")
 
-            return web.json_response({
-                "custom_display_name": self.get_custom_destination_display_name(destination_hash),
-            })
+            return web.json_response(
+                {
+                    "custom_display_name": self.get_custom_destination_display_name(
+                        destination_hash,
+                    ),
+                },
+            )
 
         # set custom destination display name
-        @routes.post("/api/v1/destination/{destination_hash}/custom-display-name/update")
+        @routes.post(
+            "/api/v1/destination/{destination_hash}/custom-display-name/update",
+        )
         async def index(request):
-
             # get path params
             destination_hash = request.match_info.get("destination_hash", "")
 
             # get request data
             data = await request.json()
-            display_name = data.get('display_name')
+            display_name = data.get("display_name")
 
             # update display name if provided
             if len(display_name) > 0:
-                self.db_upsert_custom_destination_display_name(destination_hash, display_name)
-                return web.json_response({
-                    "message": "Custom display name has been updated",
-                })
+                self.db_upsert_custom_destination_display_name(
+                    destination_hash, display_name,
+                )
+                return web.json_response(
+                    {
+                        "message": "Custom display name has been updated",
+                    },
+                )
 
             # otherwise remove display name
-            else:
-                database.CustomDestinationDisplayName.delete().where(database.CustomDestinationDisplayName.destination_hash == destination_hash).execute()
-                return web.json_response({
+            database.CustomDestinationDisplayName.delete().where(
+                database.CustomDestinationDisplayName.destination_hash
+                == destination_hash,
+            ).execute()
+            return web.json_response(
+                {
                     "message": "Custom display name has been removed",
-                })
+                },
+            )
 
         # get lxmf stamp cost for the provided lxmf.delivery destination hash
         @routes.get("/api/v1/destination/{destination_hash}/lxmf-stamp-info")
         async def index(request):
-
             # get path params
             destination_hash = request.match_info.get("destination_hash", "")
 
@@ -1974,24 +2339,29 @@ class ReticulumMeshChat:
 
             # get lxmf stamp cost from announce in database
             lxmf_stamp_cost = None
-            announce = database.Announce.get_or_none(database.Announce.destination_hash == destination_hash.hex())
+            announce = database.Announce.get_or_none(
+                database.Announce.destination_hash == destination_hash.hex(),
+            )
             if announce is not None:
                 lxmf_stamp_cost = self.parse_lxmf_stamp_cost(announce.app_data)
 
             # get outbound ticket expiry for this lxmf destination
-            lxmf_outbound_ticket_expiry = self.message_router.get_outbound_ticket_expiry(destination_hash)
+            lxmf_outbound_ticket_expiry = (
+                self.message_router.get_outbound_ticket_expiry(destination_hash)
+            )
 
-            return web.json_response({
-                "lxmf_stamp_info": {
-                    "stamp_cost": lxmf_stamp_cost,
-                    "outbound_ticket_expiry": lxmf_outbound_ticket_expiry,
+            return web.json_response(
+                {
+                    "lxmf_stamp_info": {
+                        "stamp_cost": lxmf_stamp_cost,
+                        "outbound_ticket_expiry": lxmf_outbound_ticket_expiry,
+                    },
                 },
-            })
+            )
 
         # get interface stats
         @routes.get("/api/v1/interface-stats")
         async def index(request):
-
             # get interface stats
             interface_stats = self.reticulum.get_interface_stats()
 
@@ -2000,32 +2370,42 @@ class ReticulumMeshChat:
                 interface_stats["transport_id"] = interface_stats["transport_id"].hex()
 
             # ensure probe_responder is hex as json_response can't serialize bytes
-            if "probe_responder" in interface_stats and interface_stats["probe_responder"] is not None:
-                interface_stats["probe_responder"] = interface_stats["probe_responder"].hex()
-            
+            if (
+                "probe_responder" in interface_stats
+                and interface_stats["probe_responder"] is not None
+            ):
+                interface_stats["probe_responder"] = interface_stats[
+                    "probe_responder"
+                ].hex()
+
             # ensure ifac_signature is hex as json_response can't serialize bytes
             for interface in interface_stats["interfaces"]:
-
                 if "short_name" in interface:
                     interface["interface_name"] = interface["short_name"]
 
-                if "parent_interface_name" in interface and interface["parent_interface_name"] is not None:
-                    interface["parent_interface_hash"] = interface["parent_interface_hash"].hex()
+                if (
+                    "parent_interface_name" in interface
+                    and interface["parent_interface_name"] is not None
+                ):
+                    interface["parent_interface_hash"] = interface[
+                        "parent_interface_hash"
+                    ].hex()
 
-                if "ifac_signature" in interface and interface["ifac_signature"]:
+                if interface.get("ifac_signature"):
                     interface["ifac_signature"] = interface["ifac_signature"].hex()
 
-                if "hash" in interface and interface["hash"]:
+                if interface.get("hash"):
                     interface["hash"] = interface["hash"].hex()
 
-            return web.json_response({
-                "interface_stats": interface_stats,
-            })
+            return web.json_response(
+                {
+                    "interface_stats": interface_stats,
+                },
+            )
 
         # get path table
         @routes.get("/api/v1/path-table")
         async def index(request):
-
             # get path table, making sure hash and via are in hex as json_response can't serialize bytes
             path_table = []
             for path in self.reticulum.get_path_table():
@@ -2033,14 +2413,15 @@ class ReticulumMeshChat:
                 path["via"] = path["via"].hex()
                 path_table.append(path)
 
-            return web.json_response({
-                "path_table": path_table,
-            })
+            return web.json_response(
+                {
+                    "path_table": path_table,
+                },
+            )
 
         # send lxmf message
         @routes.post("/api/v1/lxmf-messages/send")
         async def index(request):
-
             # get request body as json
             data = await request.json()
 
@@ -2060,22 +2441,27 @@ class ReticulumMeshChat:
             image_field = None
             if "image" in fields:
                 image_type = data["lxmf_message"]["fields"]["image"]["image_type"]
-                image_bytes = base64.b64decode(data["lxmf_message"]["fields"]["image"]["image_bytes"])
+                image_bytes = base64.b64decode(
+                    data["lxmf_message"]["fields"]["image"]["image_bytes"],
+                )
                 image_field = LxmfImageField(image_type, image_bytes)
 
             # parse audio field
             audio_field = None
             if "audio" in fields:
                 audio_mode = data["lxmf_message"]["fields"]["audio"]["audio_mode"]
-                audio_bytes = base64.b64decode(data["lxmf_message"]["fields"]["audio"]["audio_bytes"])
+                audio_bytes = base64.b64decode(
+                    data["lxmf_message"]["fields"]["audio"]["audio_bytes"],
+                )
                 audio_field = LxmfAudioField(audio_mode, audio_bytes)
 
             # parse file attachments field
             file_attachments_field = None
             if "file_attachments" in fields:
-
                 file_attachments = []
-                for file_attachment in data["lxmf_message"]["fields"]["file_attachments"]:
+                for file_attachment in data["lxmf_message"]["fields"][
+                    "file_attachments"
+                ]:
                     file_name = file_attachment["file_name"]
                     file_bytes = base64.b64decode(file_attachment["file_bytes"])
                     file_attachments.append(LxmfFileAttachment(file_name, file_bytes))
@@ -2083,7 +2469,6 @@ class ReticulumMeshChat:
                 file_attachments_field = LxmfFileAttachmentsField(file_attachments)
 
             try:
-
                 # send lxmf message to destination
                 lxmf_message = await self.send_message(
                     destination_hash=destination_hash,
@@ -2091,22 +2476,26 @@ class ReticulumMeshChat:
                     image_field=image_field,
                     audio_field=audio_field,
                     file_attachments_field=file_attachments_field,
-                    delivery_method=delivery_method
+                    delivery_method=delivery_method,
                 )
 
-                return web.json_response({
-                    "lxmf_message": self.convert_lxmf_message_to_dict(lxmf_message),
-                })
+                return web.json_response(
+                    {
+                        "lxmf_message": self.convert_lxmf_message_to_dict(lxmf_message),
+                    },
+                )
 
             except Exception as e:
-                return web.json_response({
-                    "message": "Sending Failed: {}".format(str(e)),
-                }, status=503)
+                return web.json_response(
+                    {
+                        "message": f"Sending Failed: {e!s}",
+                    },
+                    status=503,
+                )
 
         # cancel sending lxmf message
         @routes.post("/api/v1/lxmf-messages/{hash}/cancel")
         async def index(request):
-
             # get path params
             hash = request.match_info.get("hash", None)
 
@@ -2118,19 +2507,22 @@ class ReticulumMeshChat:
 
             # get lxmf message from database
             lxmf_message = None
-            db_lxmf_message = database.LxmfMessage.get_or_none(database.LxmfMessage.hash == hash)
+            db_lxmf_message = database.LxmfMessage.get_or_none(
+                database.LxmfMessage.hash == hash,
+            )
             if db_lxmf_message is not None:
                 lxmf_message = self.convert_db_lxmf_message_to_dict(db_lxmf_message)
 
-            return web.json_response({
-                "message": "ok",
-                "lxmf_message": lxmf_message,
-            })
+            return web.json_response(
+                {
+                    "message": "ok",
+                    "lxmf_message": lxmf_message,
+                },
+            )
 
         # identify self on existing nomadnetwork link
         @routes.post("/api/v1/nomadnetwork/{destination_hash}/identify")
         async def index(request):
-
             # get path params
             destination_hash = request.match_info.get("destination_hash", "")
 
@@ -2142,39 +2534,49 @@ class ReticulumMeshChat:
                 link = nomadnet_cached_links[destination_hash]
                 if link.status is RNS.Link.ACTIVE:
                     link.identify(self.identity)
-                    return web.json_response({
-                        "message": "Identity has been sent!",
-                    })
+                    return web.json_response(
+                        {
+                            "message": "Identity has been sent!",
+                        },
+                    )
 
             # failed to identify
-            return web.json_response({
-                "message": "Failed to identify. No active link to destination.",
-            }, status=500)
+            return web.json_response(
+                {
+                    "message": "Failed to identify. No active link to destination.",
+                },
+                status=500,
+            )
 
         # delete lxmf message
         @routes.delete("/api/v1/lxmf-messages/{hash}")
         async def index(request):
-
             # get path params
             hash = request.match_info.get("hash", None)
 
             # hash is required
             if hash is None:
-                return web.json_response({
-                    "message": "hash is required",
-                }, status=422)
+                return web.json_response(
+                    {
+                        "message": "hash is required",
+                    },
+                    status=422,
+                )
 
             # delete lxmf messages from db where hash matches
-            database.LxmfMessage.delete().where((database.LxmfMessage.hash == hash)).execute()
+            database.LxmfMessage.delete().where(
+                database.LxmfMessage.hash == hash,
+            ).execute()
 
-            return web.json_response({
-                "message": "ok",
-            })
+            return web.json_response(
+                {
+                    "message": "ok",
+                },
+            )
 
         # serve lxmf messages for conversation
         @routes.get("/api/v1/lxmf-messages/conversation/{destination_hash}")
         async def index(request):
-
             # get path params
             destination_hash = request.match_info.get("destination_hash", "")
             order = request.query.get("order", "asc")
@@ -2185,10 +2587,22 @@ class ReticulumMeshChat:
             source_hash = self.local_lxmf_destination.hash.hex()
 
             # get lxmf messages from db where "source to destination" or "destination to source" and ordered by oldest to newest
-            db_lxmf_messages = (database.LxmfMessage.select()
-                     .where((database.LxmfMessage.source_hash == source_hash) & (database.LxmfMessage.destination_hash == destination_hash))
-                     .orwhere((database.LxmfMessage.destination_hash == source_hash) & (database.LxmfMessage.source_hash == destination_hash))
-                     .order_by(database.LxmfMessage.id.asc() if order == "asc" else database.LxmfMessage.id.desc()))
+            db_lxmf_messages = (
+                database.LxmfMessage.select()
+                .where(
+                    (database.LxmfMessage.source_hash == source_hash)
+                    & (database.LxmfMessage.destination_hash == destination_hash),
+                )
+                .orwhere(
+                    (database.LxmfMessage.destination_hash == source_hash)
+                    & (database.LxmfMessage.source_hash == destination_hash),
+                )
+                .order_by(
+                    database.LxmfMessage.id.asc()
+                    if order == "asc"
+                    else database.LxmfMessage.id.desc(),
+                )
+            )
 
             # limit how many messages to return
             if count is not None:
@@ -2197,23 +2611,30 @@ class ReticulumMeshChat:
             # only get records after provided id, based on query order
             if after_id is not None:
                 if order == "asc":
-                    db_lxmf_messages = db_lxmf_messages.where((database.LxmfMessage.id > after_id))
+                    db_lxmf_messages = db_lxmf_messages.where(
+                        database.LxmfMessage.id > after_id,
+                    )
                 else:
-                    db_lxmf_messages = db_lxmf_messages.where((database.LxmfMessage.id < after_id))
+                    db_lxmf_messages = db_lxmf_messages.where(
+                        database.LxmfMessage.id < after_id,
+                    )
 
             # convert to response json
             lxmf_messages = []
             for db_lxmf_message in db_lxmf_messages:
-                lxmf_messages.append(self.convert_db_lxmf_message_to_dict(db_lxmf_message))
+                lxmf_messages.append(
+                    self.convert_db_lxmf_message_to_dict(db_lxmf_message),
+                )
 
-            return web.json_response({
-                "lxmf_messages": lxmf_messages,
-            })
+            return web.json_response(
+                {
+                    "lxmf_messages": lxmf_messages,
+                },
+            )
 
         # delete lxmf messages for conversation
         @routes.delete("/api/v1/lxmf-messages/conversation/{destination_hash}")
         async def index(request):
-
             # get path params
             destination_hash = request.match_info.get("destination_hash", "")
 
@@ -2221,27 +2642,44 @@ class ReticulumMeshChat:
             source_hash = self.local_lxmf_destination.hash.hex()
 
             # delete lxmf messages from db where "source to destination" or "destination to source"
-            (database.LxmfMessage.delete()
-             .where((database.LxmfMessage.source_hash == source_hash) & (database.LxmfMessage.destination_hash == destination_hash))
-             .orwhere((database.LxmfMessage.destination_hash == source_hash) & (database.LxmfMessage.source_hash == destination_hash))
-             .execute())
+            (
+                database.LxmfMessage.delete()
+                .where(
+                    (database.LxmfMessage.source_hash == source_hash)
+                    & (database.LxmfMessage.destination_hash == destination_hash),
+                )
+                .orwhere(
+                    (database.LxmfMessage.destination_hash == source_hash)
+                    & (database.LxmfMessage.source_hash == destination_hash),
+                )
+                .execute()
+            )
 
-            return web.json_response({
-                "message": "ok",
-            })
+            return web.json_response(
+                {
+                    "message": "ok",
+                },
+            )
 
         # get unqiue lxmf conversations
         @routes.get("/api/v1/lxmf/conversations")
         async def index(request):
-
             search_query = request.query.get("search", None)
-            filter_unread = self.parse_bool_query_param(request.query.get("filter_unread"))
-            filter_failed = self.parse_bool_query_param(request.query.get("filter_failed"))
-            filter_has_attachments = self.parse_bool_query_param(request.query.get("filter_has_attachments"))
+            filter_unread = self.parse_bool_query_param(
+                request.query.get("filter_unread"),
+            )
+            filter_failed = self.parse_bool_query_param(
+                request.query.get("filter_failed"),
+            )
+            filter_has_attachments = self.parse_bool_query_param(
+                request.query.get("filter_has_attachments"),
+            )
 
             search_destination_hashes = set()
             if search_query is not None and search_query != "":
-                search_destination_hashes = self.search_destination_hashes_by_message(search_query)
+                search_destination_hashes = self.search_destination_hashes_by_message(
+                    search_query,
+                )
 
             # sql query to fetch unique source/destination hash pairs ordered by the most recently updated message
             query = """
@@ -2267,7 +2705,6 @@ class ReticulumMeshChat:
             # parse results to get a list of conversations we have sent or received a message from
             conversations = []
             for row in cursor.fetchall():
-
                 # get data from row
                 source_hash = row[0]
                 destination_hash = row[1]
@@ -2288,13 +2725,17 @@ class ReticulumMeshChat:
                     latest_message_title = latest_message.title
                     latest_message_preview = latest_message.content
                     latest_message_created_at = latest_message.created_at
-                    latest_message_has_attachments = self.message_fields_have_attachments(latest_message.fields)
+                    latest_message_has_attachments = (
+                        self.message_fields_have_attachments(latest_message.fields)
+                    )
 
                 has_attachments = self.conversation_has_attachments(other_user_hash)
 
                 # find lxmf user icon from database
                 lxmf_user_icon = None
-                db_lxmf_user_icon = database.LxmfUserIcon.get_or_none(database.LxmfUserIcon.destination_hash == other_user_hash)
+                db_lxmf_user_icon = database.LxmfUserIcon.get_or_none(
+                    database.LxmfUserIcon.destination_hash == other_user_hash,
+                )
                 if db_lxmf_user_icon is not None:
                     lxmf_user_icon = {
                         "icon_name": db_lxmf_user_icon.icon_name,
@@ -2303,34 +2744,68 @@ class ReticulumMeshChat:
                     }
 
                 # add to conversations
-                conversations.append({
-                    "display_name": self.get_lxmf_conversation_name(other_user_hash),
-                    "custom_display_name": self.get_custom_destination_display_name(other_user_hash),
-                    "destination_hash": other_user_hash,
-                    "is_unread": self.is_lxmf_conversation_unread(other_user_hash),
-                    "failed_messages_count": self.lxmf_conversation_failed_messages_count(other_user_hash),
-                    "has_attachments": has_attachments,
-                    "latest_message_title": latest_message_title,
-                    "latest_message_preview": latest_message_preview,
-                    "latest_message_created_at": latest_message_created_at,
-                    "latest_message_has_attachments": latest_message_has_attachments,
-                    "lxmf_user_icon": lxmf_user_icon,
-                    # we say the conversation was updated when the latest message was created
-                    # otherwise this will go crazy when sending a message, as the updated_at on the latest message changes very frequently
-                    "updated_at": created_at,
-                })
+                conversations.append(
+                    {
+                        "display_name": self.get_lxmf_conversation_name(
+                            other_user_hash,
+                        ),
+                        "custom_display_name": self.get_custom_destination_display_name(
+                            other_user_hash,
+                        ),
+                        "destination_hash": other_user_hash,
+                        "is_unread": self.is_lxmf_conversation_unread(other_user_hash),
+                        "failed_messages_count": self.lxmf_conversation_failed_messages_count(
+                            other_user_hash,
+                        ),
+                        "has_attachments": has_attachments,
+                        "latest_message_title": latest_message_title,
+                        "latest_message_preview": latest_message_preview,
+                        "latest_message_created_at": latest_message_created_at,
+                        "latest_message_has_attachments": latest_message_has_attachments,
+                        "lxmf_user_icon": lxmf_user_icon,
+                        # we say the conversation was updated when the latest message was created
+                        # otherwise this will go crazy when sending a message, as the updated_at on the latest message changes very frequently
+                        "updated_at": created_at,
+                    },
+                )
 
             if search_query is not None and search_query != "":
                 lowered_query = search_query.lower()
                 filtered = []
                 for conversation in conversations:
-                    matches_display = conversation["display_name"] and lowered_query in conversation["display_name"].lower()
-                    matches_custom = conversation["custom_display_name"] and lowered_query in conversation["custom_display_name"].lower()
-                    matches_destination = conversation["destination_hash"] and lowered_query in conversation["destination_hash"].lower()
-                    matches_latest_title = conversation["latest_message_title"] and lowered_query in conversation["latest_message_title"].lower()
-                    matches_latest_preview = conversation["latest_message_preview"] and lowered_query in conversation["latest_message_preview"].lower()
-                    matches_history = conversation["destination_hash"] in search_destination_hashes
-                    if matches_display or matches_custom or matches_destination or matches_latest_title or matches_latest_preview or matches_history:
+                    matches_display = (
+                        conversation["display_name"]
+                        and lowered_query in conversation["display_name"].lower()
+                    )
+                    matches_custom = (
+                        conversation["custom_display_name"]
+                        and lowered_query in conversation["custom_display_name"].lower()
+                    )
+                    matches_destination = (
+                        conversation["destination_hash"]
+                        and lowered_query in conversation["destination_hash"].lower()
+                    )
+                    matches_latest_title = (
+                        conversation["latest_message_title"]
+                        and lowered_query
+                        in conversation["latest_message_title"].lower()
+                    )
+                    matches_latest_preview = (
+                        conversation["latest_message_preview"]
+                        and lowered_query
+                        in conversation["latest_message_preview"].lower()
+                    )
+                    matches_history = (
+                        conversation["destination_hash"] in search_destination_hashes
+                    )
+                    if (
+                        matches_display
+                        or matches_custom
+                        or matches_destination
+                        or matches_latest_title
+                        or matches_latest_preview
+                        or matches_history
+                    ):
                         filtered.append(conversation)
                 conversations = filtered
 
@@ -2338,28 +2813,33 @@ class ReticulumMeshChat:
                 conversations = [c for c in conversations if c["is_unread"]]
 
             if filter_failed:
-                conversations = [c for c in conversations if c["failed_messages_count"] > 0]
+                conversations = [
+                    c for c in conversations if c["failed_messages_count"] > 0
+                ]
 
             if filter_has_attachments:
                 conversations = [c for c in conversations if c["has_attachments"]]
 
-            return web.json_response({
-                "conversations": conversations,
-            })
+            return web.json_response(
+                {
+                    "conversations": conversations,
+                },
+            )
 
         # mark lxmf conversation as read
         @routes.get("/api/v1/lxmf/conversations/{destination_hash}/mark-as-read")
         async def index(request):
-
             # get path params
             destination_hash = request.match_info.get("destination_hash", "")
 
             # mark lxmf conversation as read
             self.db_mark_lxmf_conversation_as_read(destination_hash)
 
-            return web.json_response({
-                "message": "ok",
-            })
+            return web.json_response(
+                {
+                    "message": "ok",
+                },
+            )
 
         # get blocked destinations
         @routes.get("/api/v1/blocked-destinations")
@@ -2371,14 +2851,22 @@ class ReticulumMeshChat:
                 if isinstance(created_at, str):
                     created_at_str = created_at
                 else:
-                    created_at_str = created_at.isoformat() if hasattr(created_at, 'isoformat') else str(created_at)
-                blocked_list.append({
-                    "destination_hash": b.destination_hash,
-                    "created_at": created_at_str
-                })
-            return web.json_response({
-                "blocked_destinations": blocked_list,
-            })
+                    created_at_str = (
+                        created_at.isoformat()
+                        if hasattr(created_at, "isoformat")
+                        else str(created_at)
+                    )
+                blocked_list.append(
+                    {
+                        "destination_hash": b.destination_hash,
+                        "created_at": created_at_str,
+                    },
+                )
+            return web.json_response(
+                {
+                    "blocked_destinations": blocked_list,
+                },
+            )
 
         # add blocked destination
         @routes.post("/api/v1/blocked-destinations")
@@ -2386,8 +2874,10 @@ class ReticulumMeshChat:
             data = await request.json()
             destination_hash = data.get("destination_hash", "")
             if not destination_hash or len(destination_hash) != 32:
-                return web.json_response({"error": "Invalid destination hash"}, status=400)
-            
+                return web.json_response(
+                    {"error": "Invalid destination hash"}, status=400,
+                )
+
             try:
                 database.BlockedDestination.create(destination_hash=destination_hash)
                 # drop any existing paths to this destination
@@ -2397,22 +2887,29 @@ class ReticulumMeshChat:
                     pass
                 return web.json_response({"message": "ok"})
             except:
-                return web.json_response({"error": "Destination already blocked"}, status=400)
+                return web.json_response(
+                    {"error": "Destination already blocked"}, status=400,
+                )
 
         # remove blocked destination
         @routes.delete("/api/v1/blocked-destinations/{destination_hash}")
         async def index(request):
             destination_hash = request.match_info.get("destination_hash", "")
             if not destination_hash or len(destination_hash) != 32:
-                return web.json_response({"error": "Invalid destination hash"}, status=400)
-            
+                return web.json_response(
+                    {"error": "Invalid destination hash"}, status=400,
+                )
+
             try:
-                blocked = database.BlockedDestination.get_or_none(database.BlockedDestination.destination_hash == destination_hash)
+                blocked = database.BlockedDestination.get_or_none(
+                    database.BlockedDestination.destination_hash == destination_hash,
+                )
                 if blocked:
                     blocked.delete_instance()
                     return web.json_response({"message": "ok"})
-                else:
-                    return web.json_response({"error": "Destination not blocked"}, status=404)
+                return web.json_response(
+                    {"error": "Destination not blocked"}, status=404,
+                )
             except Exception as e:
                 return web.json_response({"error": str(e)}, status=500)
 
@@ -2420,10 +2917,19 @@ class ReticulumMeshChat:
         @routes.get("/api/v1/spam-keywords")
         async def index(request):
             keywords = database.SpamKeyword.select()
-            keyword_list = [{"id": k.id, "keyword": k.keyword, "created_at": k.created_at.isoformat()} for k in keywords]
-            return web.json_response({
-                "spam_keywords": keyword_list,
-            })
+            keyword_list = [
+                {
+                    "id": k.id,
+                    "keyword": k.keyword,
+                    "created_at": k.created_at.isoformat(),
+                }
+                for k in keywords
+            ]
+            return web.json_response(
+                {
+                    "spam_keywords": keyword_list,
+                },
+            )
 
         # add spam keyword
         @routes.post("/api/v1/spam-keywords")
@@ -2432,12 +2938,14 @@ class ReticulumMeshChat:
             keyword = data.get("keyword", "").strip()
             if not keyword:
                 return web.json_response({"error": "Keyword is required"}, status=400)
-            
+
             try:
                 database.SpamKeyword.create(keyword=keyword)
                 return web.json_response({"message": "ok"})
             except:
-                return web.json_response({"error": "Keyword already exists"}, status=400)
+                return web.json_response(
+                    {"error": "Keyword already exists"}, status=400,
+                )
 
         # remove spam keyword
         @routes.delete("/api/v1/spam-keywords/{keyword_id}")
@@ -2447,14 +2955,15 @@ class ReticulumMeshChat:
                 keyword_id = int(keyword_id)
             except:
                 return web.json_response({"error": "Invalid keyword ID"}, status=400)
-            
+
             try:
-                keyword = database.SpamKeyword.get_or_none(database.SpamKeyword.id == keyword_id)
+                keyword = database.SpamKeyword.get_or_none(
+                    database.SpamKeyword.id == keyword_id,
+                )
                 if keyword:
                     keyword.delete_instance()
                     return web.json_response({"message": "ok"})
-                else:
-                    return web.json_response({"error": "Keyword not found"}, status=404)
+                return web.json_response({"error": "Keyword not found"}, status=404)
             except Exception as e:
                 return web.json_response({"error": str(e)}, status=500)
 
@@ -2464,43 +2973,48 @@ class ReticulumMeshChat:
             message_hash = request.match_info.get("hash", "")
             data = await request.json()
             is_spam = data.get("is_spam", False)
-            
+
             try:
-                message = database.LxmfMessage.get_or_none(database.LxmfMessage.hash == message_hash)
+                message = database.LxmfMessage.get_or_none(
+                    database.LxmfMessage.hash == message_hash,
+                )
                 if message:
                     message.is_spam = is_spam
                     message.updated_at = datetime.now(timezone.utc)
                     message.save()
                     return web.json_response({"message": "ok"})
-                else:
-                    return web.json_response({"error": "Message not found"}, status=404)
+                return web.json_response({"error": "Message not found"}, status=404)
             except Exception as e:
                 return web.json_response({"error": str(e)}, status=500)
 
         # called when web app has started
         async def on_startup(app):
-
             # remember main event loop
             AsyncUtils.set_main_loop(asyncio.get_event_loop())
 
             # auto launch web browser
             if launch_browser:
                 try:
-                    webbrowser.open("http://127.0.0.1:{}".format(port))
+                    webbrowser.open(f"http://127.0.0.1:{port}")
                 except:
                     print("failed to launch web browser")
 
         # create and run web app
-        app = web.Application(client_max_size=1024 * 1024 * 50)  # allow uploading files up to 50mb
+        app = web.Application(
+            client_max_size=1024 * 1024 * 50,
+        )  # allow uploading files up to 50mb
         app.add_routes(routes)
-        app.add_routes([web.static('/', get_file_path("public/"))])  # serve anything in public folder
-        app.on_shutdown.append(self.shutdown)  # need to force close websockets and stop reticulum now
+        app.add_routes(
+            [web.static("/", get_file_path("public/"))],
+        )  # serve anything in public folder
+        app.on_shutdown.append(
+            self.shutdown,
+        )  # need to force close websockets and stop reticulum now
         app.on_startup.append(on_startup)
         web.run_app(app, host=host, port=port)
 
     # handle announcing
     async def announce(self):
-
         # update last announced at timestamp
         self.config.last_announced_at.set(int(time.time()))
 
@@ -2513,14 +3027,15 @@ class ReticulumMeshChat:
             self.message_router.announce_propagation_node()
 
         # send announce for audio call
-        self.audio_call_manager.announce(app_data=self.config.display_name.get().encode("utf-8"))
+        self.audio_call_manager.announce(
+            app_data=self.config.display_name.get().encode("utf-8"),
+        )
 
         # tell websocket clients we just announced
         await self.send_announced_to_websocket_clients()
 
     # handle syncing propagation nodes
     async def sync_propagation_nodes(self):
-
         # update last synced at timestamp
         self.config.lxmf_preferred_propagation_node_last_synced_at.set(int(time.time()))
 
@@ -2531,7 +3046,6 @@ class ReticulumMeshChat:
         await self.send_config_to_websocket_clients()
 
     async def update_config(self, data):
-
         # update display name in config
         if "display_name" in data and data["display_name"] != "":
             self.config.display_name.set(data["display_name"])
@@ -2542,10 +3056,11 @@ class ReticulumMeshChat:
 
         # update auto announce interval
         if "auto_announce_interval_seconds" in data:
-
             # auto auto announce interval
             auto_announce_interval_seconds = int(data["auto_announce_interval_seconds"])
-            self.config.auto_announce_interval_seconds.set(data["auto_announce_interval_seconds"])
+            self.config.auto_announce_interval_seconds.set(
+                data["auto_announce_interval_seconds"],
+            )
 
             # enable or disable auto announce based on interval
             if auto_announce_interval_seconds > 0:
@@ -2570,7 +3085,6 @@ class ReticulumMeshChat:
             self.config.show_suggested_community_interfaces.set(value)
 
         if "lxmf_preferred_propagation_node_destination_hash" in data:
-
             # update config value
             value = data["lxmf_preferred_propagation_node_destination_hash"]
             self.config.lxmf_preferred_propagation_node_destination_hash.set(value)
@@ -2578,13 +3092,50 @@ class ReticulumMeshChat:
             # update active propagation node
             self.set_active_propagation_node(value)
 
+        # update inbound stamp cost (for direct delivery messages)
+        if "lxmf_inbound_stamp_cost" in data:
+            value = int(data["lxmf_inbound_stamp_cost"])
+            # validate stamp cost (must be between 1 and 254)
+            if value < 1:
+                value = None
+            elif value >= 255:
+                value = 254
+            self.config.lxmf_inbound_stamp_cost.set(value)
+            # update the inbound stamp cost on the delivery destination
+            self.message_router.set_inbound_stamp_cost(
+                self.local_lxmf_destination.hash, value,
+            )
+            # re-announce to update the stamp cost in announces
+            self.local_lxmf_destination.display_name = self.config.display_name.get()
+            self.message_router.announce(
+                destination_hash=self.local_lxmf_destination.hash,
+            )
+
+        # update propagation node stamp cost (for messages propagated through your node)
+        if "lxmf_propagation_node_stamp_cost" in data:
+            value = int(data["lxmf_propagation_node_stamp_cost"])
+            # validate stamp cost (must be at least 13, per LXMF minimum)
+            if value < 13:
+                value = 13
+            elif value >= 255:
+                value = 254
+            self.config.lxmf_propagation_node_stamp_cost.set(value)
+            # update the propagation stamp cost on the router
+            self.message_router.propagation_stamp_cost = value
+            # re-announce propagation node if enabled
+            if self.config.lxmf_local_propagation_node_enabled.get():
+                self.message_router.announce_propagation_node()
+
         # update auto sync interval
         if "lxmf_preferred_propagation_node_auto_sync_interval_seconds" in data:
-            value = int(data["lxmf_preferred_propagation_node_auto_sync_interval_seconds"])
-            self.config.lxmf_preferred_propagation_node_auto_sync_interval_seconds.set(value)
+            value = int(
+                data["lxmf_preferred_propagation_node_auto_sync_interval_seconds"],
+            )
+            self.config.lxmf_preferred_propagation_node_auto_sync_interval_seconds.set(
+                value,
+            )
 
         if "lxmf_local_propagation_node_enabled" in data:
-
             # update config value
             value = bool(data["lxmf_local_propagation_node_enabled"])
             self.config.lxmf_local_propagation_node_enabled.set(value)
@@ -2598,11 +3149,15 @@ class ReticulumMeshChat:
 
         # update lxmf user icon foreground colour in config
         if "lxmf_user_icon_foreground_colour" in data:
-            self.config.lxmf_user_icon_foreground_colour.set(data["lxmf_user_icon_foreground_colour"])
+            self.config.lxmf_user_icon_foreground_colour.set(
+                data["lxmf_user_icon_foreground_colour"],
+            )
 
         # update lxmf user icon background colour in config
         if "lxmf_user_icon_background_colour" in data:
-            self.config.lxmf_user_icon_background_colour.set(data["lxmf_user_icon_background_colour"])
+            self.config.lxmf_user_icon_background_colour.set(
+                data["lxmf_user_icon_background_colour"],
+            )
 
         # send config to websocket clients
         await self.send_config_to_websocket_clients()
@@ -2618,7 +3173,7 @@ class ReticulumMeshChat:
             for field in path_data.split("|"):
                 if "=" in field:
                     variable_name, variable_value = field.split("=")
-                    data[f'var_{variable_name}'] = variable_value
+                    data[f"var_{variable_name}"] = variable_value
                 else:
                     print(f"unhandled field: {field}")
         return data
@@ -2627,7 +3182,7 @@ class ReticulumMeshChat:
         data = {}
         if field_data is not None or "{}":
             try:
-                json_data = field_data 
+                json_data = field_data
                 if isinstance(json_data, dict):
                     # add the prefixed keys to the result dictionary
                     data = {f"field_{key}": value for key, value in json_data.items()}
@@ -2635,24 +3190,28 @@ class ReticulumMeshChat:
                     return None
             except Exception as e:
                 print(f"skipping invalid field data: {e}")
-        
+
         return data
 
     # handle data received from websocket client
     async def on_websocket_data_received(self, client, data):
-
         # get type from client data
         _type = data["type"]
 
         # handle ping
         if _type == "ping":
-            AsyncUtils.run_async(client.send_str(json.dumps({
-                "type": "pong",
-            })))
+            AsyncUtils.run_async(
+                client.send_str(
+                    json.dumps(
+                        {
+                            "type": "pong",
+                        },
+                    ),
+                ),
+            )
 
         # handle updating config
         elif _type == "config.set":
-
             # get config from websocket
             config = data["config"]
 
@@ -2661,7 +3220,6 @@ class ReticulumMeshChat:
 
         # handle canceling a download
         elif _type == "nomadnet.download.cancel":
-
             # get data from websocket client
             download_id = data["download_id"]
 
@@ -2672,14 +3230,19 @@ class ReticulumMeshChat:
                 del self.active_downloads[download_id]
 
                 # notify client
-                AsyncUtils.run_async(client.send_str(json.dumps({
-                    "type": "nomadnet.download.cancelled",
-                    "download_id": download_id,
-                })))
+                AsyncUtils.run_async(
+                    client.send_str(
+                        json.dumps(
+                            {
+                                "type": "nomadnet.download.cancelled",
+                                "download_id": download_id,
+                            },
+                        ),
+                    ),
+                )
 
         # handle downloading a file from a nomadnet node
         elif _type == "nomadnet.file.download":
-
             # get data from websocket client
             destination_hash = data["nomadnet_file_download"]["destination_hash"]
             file_path = data["nomadnet_file_download"]["file_path"]
@@ -2699,7 +3262,7 @@ class ReticulumMeshChat:
 
                 # Track download speed
                 download_size = len(file_bytes)
-                if hasattr(downloader, 'start_time') and downloader.start_time:
+                if hasattr(downloader, "start_time") and downloader.start_time:
                     download_duration = time.time() - downloader.start_time
                     if download_duration > 0:
                         self.download_speeds.append((download_size, download_duration))
@@ -2707,17 +3270,25 @@ class ReticulumMeshChat:
                         if len(self.download_speeds) > 100:
                             self.download_speeds.pop(0)
 
-                AsyncUtils.run_async(client.send_str(json.dumps({
-                    "type": "nomadnet.file.download",
-                    "download_id": download_id,
-                    "nomadnet_file_download": {
-                        "status": "success",
-                        "destination_hash": destination_hash.hex(),
-                        "file_path": file_path,
-                        "file_name": file_name,
-                        "file_bytes": base64.b64encode(file_bytes).decode("utf-8"),
-                    },
-                })))
+                AsyncUtils.run_async(
+                    client.send_str(
+                        json.dumps(
+                            {
+                                "type": "nomadnet.file.download",
+                                "download_id": download_id,
+                                "nomadnet_file_download": {
+                                    "status": "success",
+                                    "destination_hash": destination_hash.hex(),
+                                    "file_path": file_path,
+                                    "file_name": file_name,
+                                    "file_bytes": base64.b64encode(file_bytes).decode(
+                                        "utf-8",
+                                    ),
+                                },
+                            },
+                        ),
+                    ),
+                )
 
             # handle file download failure
             def on_file_download_failure(failure_reason):
@@ -2725,51 +3296,74 @@ class ReticulumMeshChat:
                 if download_id in self.active_downloads:
                     del self.active_downloads[download_id]
 
-                AsyncUtils.run_async(client.send_str(json.dumps({
-                    "type": "nomadnet.file.download",
-                    "download_id": download_id,
-                    "nomadnet_file_download": {
-                        "status": "failure",
-                        "failure_reason": failure_reason,
-                        "destination_hash": destination_hash.hex(),
-                        "file_path": file_path,
-                    },
-                })))
+                AsyncUtils.run_async(
+                    client.send_str(
+                        json.dumps(
+                            {
+                                "type": "nomadnet.file.download",
+                                "download_id": download_id,
+                                "nomadnet_file_download": {
+                                    "status": "failure",
+                                    "failure_reason": failure_reason,
+                                    "destination_hash": destination_hash.hex(),
+                                    "file_path": file_path,
+                                },
+                            },
+                        ),
+                    ),
+                )
 
             # handle file download progress
             def on_file_download_progress(progress):
-                AsyncUtils.run_async(client.send_str(json.dumps({
-                    "type": "nomadnet.file.download",
-                    "download_id": download_id,
-                    "nomadnet_file_download": {
-                        "status": "progress",
-                        "progress": progress,
-                        "destination_hash": destination_hash.hex(),
-                        "file_path": file_path,
-                    },
-                })))
+                AsyncUtils.run_async(
+                    client.send_str(
+                        json.dumps(
+                            {
+                                "type": "nomadnet.file.download",
+                                "download_id": download_id,
+                                "nomadnet_file_download": {
+                                    "status": "progress",
+                                    "progress": progress,
+                                    "destination_hash": destination_hash.hex(),
+                                    "file_path": file_path,
+                                },
+                            },
+                        ),
+                    ),
+                )
 
             # download the file
-            downloader = NomadnetFileDownloader(destination_hash, file_path, on_file_download_success, on_file_download_failure, on_file_download_progress)
+            downloader = NomadnetFileDownloader(
+                destination_hash,
+                file_path,
+                on_file_download_success,
+                on_file_download_failure,
+                on_file_download_progress,
+            )
             downloader.start_time = time.time()
             self.active_downloads[download_id] = downloader
 
             # notify client download started
-            AsyncUtils.run_async(client.send_str(json.dumps({
-                "type": "nomadnet.file.download",
-                "download_id": download_id,
-                "nomadnet_file_download": {
-                    "status": "started",
-                    "destination_hash": destination_hash.hex(),
-                    "file_path": file_path,
-                },
-            })))
+            AsyncUtils.run_async(
+                client.send_str(
+                    json.dumps(
+                        {
+                            "type": "nomadnet.file.download",
+                            "download_id": download_id,
+                            "nomadnet_file_download": {
+                                "status": "started",
+                                "destination_hash": destination_hash.hex(),
+                                "file_path": file_path,
+                            },
+                        },
+                    ),
+                ),
+            )
 
             AsyncUtils.run_async(downloader.download())
 
         # handle downloading a page from a nomadnet node
         elif _type == "nomadnet.page.download":
-
             # get data from websocket client
             destination_hash = data["nomadnet_page_download"]["destination_hash"]
             page_path = data["nomadnet_page_download"]["page_path"]
@@ -2778,7 +3372,7 @@ class ReticulumMeshChat:
             # generate download id
             self.download_id_counter += 1
             download_id = self.download_id_counter
-       
+
             combined_data = {}
             # parse data from page path
             # example: hash:/page/index.mu`field1=123|field2=456
@@ -2798,10 +3392,8 @@ class ReticulumMeshChat:
             if field_data is not None:
                 combined_data.update(field_data)
 
-
             # convert destination hash to bytes
             destination_hash = bytes.fromhex(destination_hash)
-
 
             # handle successful page download
             def on_page_download_success(page_content):
@@ -2809,16 +3401,22 @@ class ReticulumMeshChat:
                 if download_id in self.active_downloads:
                     del self.active_downloads[download_id]
 
-                AsyncUtils.run_async(client.send_str(json.dumps({
-                    "type": "nomadnet.page.download",
-                    "download_id": download_id,
-                    "nomadnet_page_download": {
-                        "status": "success",
-                        "destination_hash": destination_hash.hex(),
-                        "page_path": page_path,
-                        "page_content": page_content,
-                    },
-                })))
+                AsyncUtils.run_async(
+                    client.send_str(
+                        json.dumps(
+                            {
+                                "type": "nomadnet.page.download",
+                                "download_id": download_id,
+                                "nomadnet_page_download": {
+                                    "status": "success",
+                                    "destination_hash": destination_hash.hex(),
+                                    "page_path": page_path,
+                                    "page_content": page_content,
+                                },
+                            },
+                        ),
+                    ),
+                )
 
             # handle page download failure
             def on_page_download_failure(failure_reason):
@@ -2826,44 +3424,69 @@ class ReticulumMeshChat:
                 if download_id in self.active_downloads:
                     del self.active_downloads[download_id]
 
-                AsyncUtils.run_async(client.send_str(json.dumps({
-                    "type": "nomadnet.page.download",
-                    "download_id": download_id,
-                    "nomadnet_page_download": {
-                        "status": "failure",
-                        "failure_reason": failure_reason,
-                        "destination_hash": destination_hash.hex(),
-                        "page_path": page_path,
-                    },
-                })))
+                AsyncUtils.run_async(
+                    client.send_str(
+                        json.dumps(
+                            {
+                                "type": "nomadnet.page.download",
+                                "download_id": download_id,
+                                "nomadnet_page_download": {
+                                    "status": "failure",
+                                    "failure_reason": failure_reason,
+                                    "destination_hash": destination_hash.hex(),
+                                    "page_path": page_path,
+                                },
+                            },
+                        ),
+                    ),
+                )
 
             # handle page download progress
             def on_page_download_progress(progress):
-                AsyncUtils.run_async(client.send_str(json.dumps({
-                    "type": "nomadnet.page.download",
-                    "download_id": download_id,
-                    "nomadnet_page_download": {
-                        "status": "progress",
-                        "progress": progress,
-                        "destination_hash": destination_hash.hex(),
-                        "page_path": page_path,
-                    },
-                })))
+                AsyncUtils.run_async(
+                    client.send_str(
+                        json.dumps(
+                            {
+                                "type": "nomadnet.page.download",
+                                "download_id": download_id,
+                                "nomadnet_page_download": {
+                                    "status": "progress",
+                                    "progress": progress,
+                                    "destination_hash": destination_hash.hex(),
+                                    "page_path": page_path,
+                                },
+                            },
+                        ),
+                    ),
+                )
 
             # download the page
-            downloader = NomadnetPageDownloader(destination_hash, page_path_to_download, combined_data, on_page_download_success, on_page_download_failure, on_page_download_progress)
+            downloader = NomadnetPageDownloader(
+                destination_hash,
+                page_path_to_download,
+                combined_data,
+                on_page_download_success,
+                on_page_download_failure,
+                on_page_download_progress,
+            )
             self.active_downloads[download_id] = downloader
 
             # notify client download started
-            AsyncUtils.run_async(client.send_str(json.dumps({
-                "type": "nomadnet.page.download",
-                "download_id": download_id,
-                "nomadnet_page_download": {
-                    "status": "started",
-                    "destination_hash": destination_hash.hex(),
-                    "page_path": page_path,
-                },
-            })))
+            AsyncUtils.run_async(
+                client.send_str(
+                    json.dumps(
+                        {
+                            "type": "nomadnet.page.download",
+                            "download_id": download_id,
+                            "nomadnet_page_download": {
+                                "status": "started",
+                                "destination_hash": destination_hash.hex(),
+                                "page_path": page_path,
+                            },
+                        },
+                    ),
+                ),
+            )
 
             AsyncUtils.run_async(downloader.download())
 
@@ -2882,16 +3505,24 @@ class ReticulumMeshChat:
 
     # broadcasts config to all websocket clients
     async def send_config_to_websocket_clients(self):
-        await self.websocket_broadcast(json.dumps({
-            "type": "config",
-            "config": self.get_config_dict(),
-        }))
+        await self.websocket_broadcast(
+            json.dumps(
+                {
+                    "type": "config",
+                    "config": self.get_config_dict(),
+                },
+            ),
+        )
 
     # broadcasts to all websocket clients that we just announced
     async def send_announced_to_websocket_clients(self):
-        await self.websocket_broadcast(json.dumps({
-            "type": "announced",
-        }))
+        await self.websocket_broadcast(
+            json.dumps(
+                {
+                    "type": "announced",
+                },
+            ),
+        )
 
     # returns a dictionary of config
     def get_config_dict(self):
@@ -2917,11 +3548,12 @@ class ReticulumMeshChat:
             "lxmf_user_icon_name": self.config.lxmf_user_icon_name.get(),
             "lxmf_user_icon_foreground_colour": self.config.lxmf_user_icon_foreground_colour.get(),
             "lxmf_user_icon_background_colour": self.config.lxmf_user_icon_background_colour.get(),
+            "lxmf_inbound_stamp_cost": self.config.lxmf_inbound_stamp_cost.get(),
+            "lxmf_propagation_node_stamp_cost": self.config.lxmf_propagation_node_stamp_cost.get(),
         }
 
     # convert audio call to dict
     def convert_audio_call_to_dict(self, audio_call: AudioCall):
-
         # get remote identity hash
         remote_identity_hash = None
         remote_identity = audio_call.get_remote_identity()
@@ -2933,13 +3565,14 @@ class ReticulumMeshChat:
         remote_destination_hash = None
         remote_destination_hash_hex = None
         if remote_identity is not None:
-            remote_destination_hash = RNS.Destination.hash(remote_identity, "call", "audio")
+            remote_destination_hash = RNS.Destination.hash(
+                remote_identity, "call", "audio",
+            )
             remote_destination_hash_hex = remote_destination_hash.hex()
 
         # determine path to remote destination
         path = None
         if remote_destination_hash is not None:
-
             # determine next hop and hop count
             hops = RNS.Transport.hops_to(remote_destination_hash)
             next_hop_bytes = self.reticulum.get_next_hop(remote_destination_hash)
@@ -2947,7 +3580,9 @@ class ReticulumMeshChat:
             # ensure next hop provided
             if next_hop_bytes is not None:
                 next_hop = next_hop_bytes.hex()
-                next_hop_interface = self.reticulum.get_next_hop_if_name(remote_destination_hash)
+                next_hop_interface = self.reticulum.get_next_hop_if_name(
+                    remote_destination_hash,
+                )
                 path = {
                     "hops": hops,
                     "next_hop": next_hop,
@@ -2965,26 +3600,25 @@ class ReticulumMeshChat:
 
     # convert an lxmf message to a dictionary, for sending over websocket
     def convert_lxmf_message_to_dict(self, lxmf_message: LXMF.LXMessage):
-
         # handle fields
         fields = {}
         message_fields = lxmf_message.get_fields()
         for field_type in message_fields:
-
             value = message_fields[field_type]
 
             # handle file attachments field
             if field_type == LXMF.FIELD_FILE_ATTACHMENTS:
-
                 # process file attachments
                 file_attachments = []
                 for file_attachment in value:
                     file_name = file_attachment[0]
                     file_bytes = base64.b64encode(file_attachment[1]).decode("utf-8")
-                    file_attachments.append({
-                        "file_name": file_name,
-                        "file_bytes": file_bytes,
-                    })
+                    file_attachments.append(
+                        {
+                            "file_name": file_name,
+                            "file_bytes": file_bytes,
+                        },
+                    )
 
                 # add to fields
                 fields["file_attachments"] = file_attachments
@@ -3034,9 +3668,11 @@ class ReticulumMeshChat:
             "progress": progress_percentage,
             "method": self.convert_lxmf_method_to_string(lxmf_message),
             "delivery_attempts": lxmf_message.delivery_attempts,
-            "next_delivery_attempt_at": getattr(lxmf_message, "next_delivery_attempt", None),  # attribute may not exist yet
-            "title": lxmf_message.title.decode('utf-8'),
-            "content": lxmf_message.content.decode('utf-8'),
+            "next_delivery_attempt_at": getattr(
+                lxmf_message, "next_delivery_attempt", None,
+            ),  # attribute may not exist yet
+            "title": lxmf_message.title.decode("utf-8"),
+            "content": lxmf_message.content.decode("utf-8"),
             "fields": fields,
             "timestamp": lxmf_message.timestamp,
             "rssi": rssi,
@@ -3046,7 +3682,6 @@ class ReticulumMeshChat:
 
     # convert lxmf state to a human friendly string
     def convert_lxmf_state_to_string(self, lxmf_message: LXMF.LXMessage):
-
         # convert state to string
         lxmf_message_state = "unknown"
         if lxmf_message.state == LXMF.LXMessage.GENERATING:
@@ -3070,7 +3705,6 @@ class ReticulumMeshChat:
 
     # convert lxmf method to a human friendly string
     def convert_lxmf_method_to_string(self, lxmf_message: LXMF.LXMessage):
-
         # convert method to string
         lxmf_message_method = "unknown"
         if lxmf_message.method == LXMF.LXMessage.OPPORTUNISTIC:
@@ -3085,7 +3719,6 @@ class ReticulumMeshChat:
         return lxmf_message_method
 
     def convert_propagation_node_state_to_string(self, state):
-
         # map states to strings
         state_map = {
             LXMRouter.PR_IDLE: "idle",
@@ -3107,12 +3740,10 @@ class ReticulumMeshChat:
         # return string for state, or fallback to unknown
         if state in state_map:
             return state_map[state]
-        else:
-            return "unknown"
+        return "unknown"
 
     # convert database announce to a dictionary
     def convert_db_announce_to_dict(self, announce: database.Announce):
-
         # parse display name from announce
         display_name = None
         if announce.aspect == "lxmf.delivery":
@@ -3122,7 +3753,9 @@ class ReticulumMeshChat:
 
         # find lxmf user icon from database
         lxmf_user_icon = None
-        db_lxmf_user_icon = database.LxmfUserIcon.get_or_none(database.LxmfUserIcon.destination_hash == announce.destination_hash)
+        db_lxmf_user_icon = database.LxmfUserIcon.get_or_none(
+            database.LxmfUserIcon.destination_hash == announce.destination_hash,
+        )
         if db_lxmf_user_icon is not None:
             lxmf_user_icon = {
                 "icon_name": db_lxmf_user_icon.icon_name,
@@ -3145,7 +3778,9 @@ class ReticulumMeshChat:
             "snr": announce.snr,
             "quality": announce.quality,
             "display_name": display_name,
-            "custom_display_name": self.get_custom_destination_display_name(announce.destination_hash),
+            "custom_display_name": self.get_custom_destination_display_name(
+                announce.destination_hash,
+            ),
             "lxmf_user_icon": lxmf_user_icon,
             "created_at": announce.created_at,
             "updated_at": announce.updated_at,
@@ -3164,7 +3799,6 @@ class ReticulumMeshChat:
 
     # convert database lxmf message to a dictionary
     def convert_db_lxmf_message_to_dict(self, db_lxmf_message: database.LxmfMessage):
-
         return {
             "id": db_lxmf_message.id,
             "hash": db_lxmf_message.hash,
@@ -3189,10 +3823,17 @@ class ReticulumMeshChat:
         }
 
     # updates the lxmf user icon for the provided destination hash
-    def update_lxmf_user_icon(self, destination_hash: str, icon_name: str, foreground_colour: str, background_colour: str):
-
+    def update_lxmf_user_icon(
+        self,
+        destination_hash: str,
+        icon_name: str,
+        foreground_colour: str,
+        background_colour: str,
+    ):
         # log
-        print(f"updating lxmf user icon for {destination_hash} to icon_name={icon_name}, foreground_colour={foreground_colour}, background_colour={background_colour}")
+        print(
+            f"updating lxmf user icon for {destination_hash} to icon_name={icon_name}, foreground_colour={foreground_colour}, background_colour={background_colour}",
+        )
 
         # prepare data to insert or update
         data = {
@@ -3205,14 +3846,16 @@ class ReticulumMeshChat:
 
         # upsert to database
         query = database.LxmfUserIcon.insert(data)
-        query = query.on_conflict(conflict_target=[database.LxmfUserIcon.destination_hash], update=data)
+        query = query.on_conflict(
+            conflict_target=[database.LxmfUserIcon.destination_hash], update=data,
+        )
         query.execute()
 
     # check if a destination is blocked
     def is_destination_blocked(self, destination_hash: str) -> bool:
         try:
             blocked = database.BlockedDestination.get_or_none(
-                database.BlockedDestination.destination_hash == destination_hash
+                database.BlockedDestination.destination_hash == destination_hash,
             )
             return blocked is not None
         except:
@@ -3264,27 +3907,37 @@ class ReticulumMeshChat:
 
             # ignore telemetry requests from sideband
             if is_sideband_telemetry_request:
-                print("Ignoring received LXMF message as it is a telemetry request command")
+                print(
+                    "Ignoring received LXMF message as it is a telemetry request command",
+                )
                 return
 
             # check for spam keywords
             is_spam = False
-            message_title = lxmf_message.title if hasattr(lxmf_message, 'title') else ""
-            message_content = lxmf_message.content if hasattr(lxmf_message, 'content') else ""
-            
+            message_title = lxmf_message.title if hasattr(lxmf_message, "title") else ""
+            message_content = (
+                lxmf_message.content if hasattr(lxmf_message, "content") else ""
+            )
+
             # check spam keywords
             if self.check_spam_keywords(message_title, message_content):
                 is_spam = True
-                print(f"Marking LXMF message as spam due to keyword match: {source_hash}")
+                print(
+                    f"Marking LXMF message as spam due to keyword match: {source_hash}",
+                )
 
             # reject attachments from blocked sources (already checked above, but double-check)
             if self.has_attachments(lxmf_fields):
                 if self.is_destination_blocked(source_hash):
-                    print(f"Rejecting LXMF message with attachments from blocked source: {source_hash}")
+                    print(
+                        f"Rejecting LXMF message with attachments from blocked source: {source_hash}",
+                    )
                     return
                 # reject attachments from spam sources
                 if is_spam:
-                    print(f"Rejecting LXMF message with attachments from spam source: {source_hash}")
+                    print(
+                        f"Rejecting LXMF message with attachments from spam source: {source_hash}",
+                    )
                     return
 
             # upsert lxmf message to database with spam flag
@@ -3298,44 +3951,66 @@ class ReticulumMeshChat:
                     icon_name = icon_appearance[0]
                     foreground_colour = "#" + icon_appearance[1].hex()
                     background_colour = "#" + icon_appearance[2].hex()
-                    self.update_lxmf_user_icon(lxmf_message.source_hash.hex(), icon_name, foreground_colour, background_colour)
+                    self.update_lxmf_user_icon(
+                        lxmf_message.source_hash.hex(),
+                        icon_name,
+                        foreground_colour,
+                        background_colour,
+                    )
             except Exception as e:
                 print("failed to update lxmf user icon from lxmf message")
                 print(e)
-                pass
 
             # find message from database
-            db_lxmf_message = database.LxmfMessage.get_or_none(database.LxmfMessage.hash == lxmf_message.hash.hex())
+            db_lxmf_message = database.LxmfMessage.get_or_none(
+                database.LxmfMessage.hash == lxmf_message.hash.hex(),
+            )
             if db_lxmf_message is None:
                 return
 
             # send received lxmf message data to all websocket clients
-            AsyncUtils.run_async(self.websocket_broadcast(json.dumps({
-                "type": "lxmf.delivery",
-                "lxmf_message": self.convert_db_lxmf_message_to_dict(db_lxmf_message),
-            })))
+            AsyncUtils.run_async(
+                self.websocket_broadcast(
+                    json.dumps(
+                        {
+                            "type": "lxmf.delivery",
+                            "lxmf_message": self.convert_db_lxmf_message_to_dict(
+                                db_lxmf_message,
+                            ),
+                        },
+                    ),
+                ),
+            )
 
         except Exception as e:
             # do nothing on error
-            print("lxmf_delivery error: {}".format(e))
+            print(f"lxmf_delivery error: {e}")
 
     # handle delivery status update for an outbound lxmf message
     def on_lxmf_sending_state_updated(self, lxmf_message):
-
         # upsert lxmf message to database
         self.db_upsert_lxmf_message(lxmf_message)
 
         # send lxmf message state to all websocket clients
-        AsyncUtils.run_async(self.websocket_broadcast(json.dumps({
-            "type": "lxmf_message_state_updated",
-            "lxmf_message": self.convert_lxmf_message_to_dict(lxmf_message),
-        })))
+        AsyncUtils.run_async(
+            self.websocket_broadcast(
+                json.dumps(
+                    {
+                        "type": "lxmf_message_state_updated",
+                        "lxmf_message": self.convert_lxmf_message_to_dict(lxmf_message),
+                    },
+                ),
+            ),
+        )
 
     # handle delivery failed for an outbound lxmf message
     def on_lxmf_sending_failed(self, lxmf_message):
-
         # check if this failed message should fall back to sending via a propagation node
-        if lxmf_message.state == LXMF.LXMessage.FAILED and hasattr(lxmf_message, "try_propagation_on_fail") and lxmf_message.try_propagation_on_fail:
+        if (
+            lxmf_message.state == LXMF.LXMessage.FAILED
+            and hasattr(lxmf_message, "try_propagation_on_fail")
+            and lxmf_message.try_propagation_on_fail
+        ):
             self.send_failed_message_via_propagation_node(lxmf_message)
 
         # update state
@@ -3343,7 +4018,6 @@ class ReticulumMeshChat:
 
     # sends a previously failed message via a propagation node
     def send_failed_message_via_propagation_node(self, lxmf_message: LXMF.LXMessage):
-
         # reset internal message state
         lxmf_message.packed = None
         lxmf_message.delivery_attempts = 0
@@ -3358,8 +4032,9 @@ class ReticulumMeshChat:
         self.message_router.handle_outbound(lxmf_message)
 
     # upserts the provided lxmf message to the database
-    def db_upsert_lxmf_message(self, lxmf_message: LXMF.LXMessage, is_spam: bool = False):
-
+    def db_upsert_lxmf_message(
+        self, lxmf_message: LXMF.LXMessage, is_spam: bool = False,
+    ):
         # convert lxmf message to dict
         lxmf_message_dict = self.convert_lxmf_message_to_dict(lxmf_message)
 
@@ -3387,12 +4062,20 @@ class ReticulumMeshChat:
 
         # upsert to database
         query = database.LxmfMessage.insert(data)
-        query = query.on_conflict(conflict_target=[database.LxmfMessage.hash], update=data)
+        query = query.on_conflict(
+            conflict_target=[database.LxmfMessage.hash], update=data,
+        )
         query.execute()
 
     # upserts the provided announce to the database
-    def db_upsert_announce(self, identity: RNS.Identity, destination_hash: bytes, aspect: str, app_data: bytes, announce_packet_hash: bytes):
-
+    def db_upsert_announce(
+        self,
+        identity: RNS.Identity,
+        destination_hash: bytes,
+        aspect: str,
+        app_data: bytes,
+        announce_packet_hash: bytes,
+    ):
         # get rssi, snr and signal quality if available
         rssi = self.reticulum.get_packet_rssi(announce_packet_hash)
         snr = self.reticulum.get_packet_snr(announce_packet_hash)
@@ -3403,7 +4086,9 @@ class ReticulumMeshChat:
             "destination_hash": destination_hash.hex(),
             "aspect": aspect,
             "identity_hash": identity.hash.hex(),
-            "identity_public_key": base64.b64encode(identity.get_public_key()).decode("utf-8"),
+            "identity_public_key": base64.b64encode(identity.get_public_key()).decode(
+                "utf-8",
+            ),
             "rssi": rssi,
             "snr": snr,
             "quality": quality,
@@ -3417,12 +4102,15 @@ class ReticulumMeshChat:
 
         # upsert to database
         query = database.Announce.insert(data)
-        query = query.on_conflict(conflict_target=[database.Announce.destination_hash], update=data)
+        query = query.on_conflict(
+            conflict_target=[database.Announce.destination_hash], update=data,
+        )
         query.execute()
 
     # upserts a custom destination display name to the database
-    def db_upsert_custom_destination_display_name(self, destination_hash: str, display_name: str):
-
+    def db_upsert_custom_destination_display_name(
+        self, destination_hash: str, display_name: str,
+    ):
         # prepare data to insert or update
         data = {
             "destination_hash": destination_hash,
@@ -3432,12 +4120,16 @@ class ReticulumMeshChat:
 
         # upsert to database
         query = database.CustomDestinationDisplayName.insert(data)
-        query = query.on_conflict(conflict_target=[database.CustomDestinationDisplayName.destination_hash], update=data)
+        query = query.on_conflict(
+            conflict_target=[database.CustomDestinationDisplayName.destination_hash],
+            update=data,
+        )
         query.execute()
 
     # upserts a custom destination display name to the database
-    def db_upsert_favourite(self, destination_hash: str, display_name: str, aspect: str):
-
+    def db_upsert_favourite(
+        self, destination_hash: str, display_name: str, aspect: str,
+    ):
         # prepare data to insert or update
         data = {
             "destination_hash": destination_hash,
@@ -3448,12 +4140,14 @@ class ReticulumMeshChat:
 
         # upsert to database
         query = database.FavouriteDestination.insert(data)
-        query = query.on_conflict(conflict_target=[database.FavouriteDestination.destination_hash], update=data)
+        query = query.on_conflict(
+            conflict_target=[database.FavouriteDestination.destination_hash],
+            update=data,
+        )
         query.execute()
 
     # upserts lxmf conversation read state to the database
     def db_mark_lxmf_conversation_as_read(self, destination_hash: str):
-
         # prepare data to insert or update
         data = {
             "destination_hash": destination_hash,
@@ -3463,16 +4157,22 @@ class ReticulumMeshChat:
 
         # upsert to database
         query = database.LxmfConversationReadState.insert(data)
-        query = query.on_conflict(conflict_target=[database.LxmfConversationReadState.destination_hash], update=data)
+        query = query.on_conflict(
+            conflict_target=[database.LxmfConversationReadState.destination_hash],
+            update=data,
+        )
         query.execute()
 
     # handle sending an lxmf message to reticulum
-    async def send_message(self, destination_hash: str, content: str,
-                           image_field: LxmfImageField = None,
-                           audio_field: LxmfAudioField = None,
-                           file_attachments_field: LxmfFileAttachmentsField = None,
-                           delivery_method: str = None) -> LXMF.LXMessage:
-
+    async def send_message(
+        self,
+        destination_hash: str,
+        content: str,
+        image_field: LxmfImageField = None,
+        audio_field: LxmfAudioField = None,
+        file_attachments_field: LxmfFileAttachmentsField = None,
+        delivery_method: str = None,
+    ) -> LXMF.LXMessage:
         # convert destination hash to bytes
         destination_hash = bytes.fromhex(destination_hash)
 
@@ -3481,23 +4181,30 @@ class ReticulumMeshChat:
 
         # check if we have a path to the destination
         if not RNS.Transport.has_path(destination_hash):
-
             # we don't have a path, so we need to request it
             RNS.Transport.request_path(destination_hash)
 
             # wait until we have a path, or give up after the configured timeout
-            while not RNS.Transport.has_path(destination_hash) and time.time() < timeout_after_seconds:
+            while (
+                not RNS.Transport.has_path(destination_hash)
+                and time.time() < timeout_after_seconds
+            ):
                 await asyncio.sleep(0.1)
 
         # find destination identity from hash
         destination_identity = RNS.Identity.recall(destination_hash)
         if destination_identity is None:
-
             # we have to bail out of sending, since we don't have the identity/path yet
             raise Exception("Could not find path to destination. Try again later.")
 
         # create destination for recipients lxmf delivery address
-        lxmf_destination = RNS.Destination(destination_identity, RNS.Destination.OUT, RNS.Destination.SINGLE, "lxmf", "delivery")
+        lxmf_destination = RNS.Destination(
+            destination_identity,
+            RNS.Destination.OUT,
+            RNS.Destination.SINGLE,
+            "lxmf",
+            "delivery",
+        )
 
         # determine how the user wants to send the message
         desired_delivery_method = None
@@ -3510,11 +4217,12 @@ class ReticulumMeshChat:
 
         # determine how to send the message if the user didn't provide a method
         if desired_delivery_method is None:
-
             # send messages over a direct link by default
             desired_delivery_method = LXMF.LXMessage.DIRECT
-            if not self.message_router.delivery_link_available(destination_hash) and RNS.Identity.current_ratchet_id(destination_hash) != None:
-
+            if (
+                not self.message_router.delivery_link_available(destination_hash)
+                and RNS.Identity.current_ratchet_id(destination_hash) != None
+            ):
                 # since there's no link established to the destination, it's faster to send opportunistically
                 # this is because it takes several packets to establish a link, and then we still have to send the message over it
                 # oppotunistic mode will send the message in a single packet (if the message is small enough, otherwise it falls back to a direct link)
@@ -3522,18 +4230,26 @@ class ReticulumMeshChat:
                 desired_delivery_method = LXMF.LXMessage.OPPORTUNISTIC
 
         # create lxmf message
-        lxmf_message = LXMF.LXMessage(lxmf_destination, self.local_lxmf_destination, content, desired_method=desired_delivery_method)
-        lxmf_message.try_propagation_on_fail = self.config.auto_send_failed_messages_to_propagation_node.get()
+        lxmf_message = LXMF.LXMessage(
+            lxmf_destination,
+            self.local_lxmf_destination,
+            content,
+            desired_method=desired_delivery_method,
+        )
+        lxmf_message.try_propagation_on_fail = (
+            self.config.auto_send_failed_messages_to_propagation_node.get()
+        )
 
         lxmf_message.fields = {}
 
         # add file attachments field
         if file_attachments_field is not None:
-
             # create array of [[file_name, file_bytes], [file_name, file_bytes], ...]
             file_attachments = []
             for file_attachment in file_attachments_field.file_attachments:
-                file_attachments.append([file_attachment.file_name, file_attachment.file_bytes])
+                file_attachments.append(
+                    [file_attachment.file_name, file_attachment.file_bytes],
+                )
 
             # set field attachments field
             lxmf_message.fields[LXMF.FIELD_FILE_ATTACHMENTS] = file_attachments
@@ -3557,11 +4273,17 @@ class ReticulumMeshChat:
         # we could keep track of when the icon appearance was last sent to this destination, and when it last changed
         # we could save 6 bytes for the 2x colours, and also however long the icon name is, but not today!
         lxmf_user_icon_name = self.config.lxmf_user_icon_name.get()
-        lxmf_user_icon_foreground_colour = self.config.lxmf_user_icon_foreground_colour.get()
-        lxmf_user_icon_background_colour = self.config.lxmf_user_icon_background_colour.get()
-        if (lxmf_user_icon_name is not None
-                and lxmf_user_icon_foreground_colour is not None
-                and lxmf_user_icon_background_colour is not None):
+        lxmf_user_icon_foreground_colour = (
+            self.config.lxmf_user_icon_foreground_colour.get()
+        )
+        lxmf_user_icon_background_colour = (
+            self.config.lxmf_user_icon_background_colour.get()
+        )
+        if (
+            lxmf_user_icon_name is not None
+            and lxmf_user_icon_foreground_colour is not None
+            and lxmf_user_icon_background_colour is not None
+        ):
             lxmf_message.fields[LXMF.FIELD_ICON_APPEARANCE] = [
                 lxmf_user_icon_name,
                 ColourUtils.hex_colour_to_byte_array(lxmf_user_icon_foreground_colour),
@@ -3579,10 +4301,14 @@ class ReticulumMeshChat:
         self.db_upsert_lxmf_message(lxmf_message)
 
         # tell all websocket clients that old failed message was deleted so it can remove from ui
-        await self.websocket_broadcast(json.dumps({
-            "type": "lxmf_message_created",
-            "lxmf_message": self.convert_lxmf_message_to_dict(lxmf_message),
-        }))
+        await self.websocket_broadcast(
+            json.dumps(
+                {
+                    "type": "lxmf_message_created",
+                    "lxmf_message": self.convert_lxmf_message_to_dict(lxmf_message),
+                },
+            ),
+        )
 
         # handle lxmf message progress loop without blocking or awaiting
         # otherwise other incoming websocket packets will not be processed until sending is complete
@@ -3593,12 +4319,10 @@ class ReticulumMeshChat:
 
     # updates lxmf message in database and broadcasts to websocket until it's delivered, or it fails
     async def handle_lxmf_message_progress(self, lxmf_message):
-
         # FIXME: there's no register_progress_callback on the lxmf message, so manually send progress until delivered, propagated or failed
         # we also can't use on_lxmf_sending_state_updated method to do this, because of async/await issues...
         should_update_message = True
         while should_update_message:
-
             # wait 1 second between sending updates
             await asyncio.sleep(1)
 
@@ -3606,14 +4330,21 @@ class ReticulumMeshChat:
             self.db_upsert_lxmf_message(lxmf_message)
 
             # send update to websocket clients
-            await self.websocket_broadcast(json.dumps({
-                "type": "lxmf_message_state_updated",
-                "lxmf_message": self.convert_lxmf_message_to_dict(lxmf_message),
-            }))
+            await self.websocket_broadcast(
+                json.dumps(
+                    {
+                        "type": "lxmf_message_state_updated",
+                        "lxmf_message": self.convert_lxmf_message_to_dict(lxmf_message),
+                    },
+                ),
+            )
 
             # check message state
             has_delivered = lxmf_message.state == LXMF.LXMessage.DELIVERED
-            has_propagated = lxmf_message.state == LXMF.LXMessage.SENT and lxmf_message.method == LXMF.LXMessage.PROPAGATED
+            has_propagated = (
+                lxmf_message.state == LXMF.LXMessage.SENT
+                and lxmf_message.method == LXMF.LXMessage.PROPAGATED
+            )
             has_failed = lxmf_message.state == LXMF.LXMessage.FAILED
             is_cancelled = lxmf_message.state == LXMF.LXMessage.CANCELLED
 
@@ -3623,8 +4354,14 @@ class ReticulumMeshChat:
 
     # handle an announce received from reticulum, for an audio call address
     # NOTE: cant be async, as Reticulum doesn't await it
-    def on_audio_call_announce_received(self, aspect, destination_hash, announced_identity, app_data, announce_packet_hash):
-
+    def on_audio_call_announce_received(
+        self,
+        aspect,
+        destination_hash,
+        announced_identity,
+        app_data,
+        announce_packet_hash,
+    ):
         # check if source is blocked - drop announce and path if blocked
         identity_hash = announced_identity.hash.hex()
         if self.is_destination_blocked(identity_hash):
@@ -3633,29 +4370,49 @@ class ReticulumMeshChat:
             return
 
         # log received announce
-        print("Received an announce from " + RNS.prettyhexrep(destination_hash) + " for [call.audio]")
+        print(
+            "Received an announce from "
+            + RNS.prettyhexrep(destination_hash)
+            + " for [call.audio]",
+        )
 
         # track announce timestamp
         self.announce_timestamps.append(time.time())
 
         # upsert announce to database
-        self.db_upsert_announce(announced_identity, destination_hash, aspect, app_data, announce_packet_hash)
+        self.db_upsert_announce(
+            announced_identity, destination_hash, aspect, app_data, announce_packet_hash,
+        )
 
         # find announce from database
-        announce = database.Announce.get_or_none(database.Announce.destination_hash == destination_hash.hex())
+        announce = database.Announce.get_or_none(
+            database.Announce.destination_hash == destination_hash.hex(),
+        )
         if announce is None:
             return
 
         # send database announce to all websocket clients
-        AsyncUtils.run_async(self.websocket_broadcast(json.dumps({
-            "type": "announce",
-            "announce": self.convert_db_announce_to_dict(announce),
-        })))
+        AsyncUtils.run_async(
+            self.websocket_broadcast(
+                json.dumps(
+                    {
+                        "type": "announce",
+                        "announce": self.convert_db_announce_to_dict(announce),
+                    },
+                ),
+            ),
+        )
 
     # handle an announce received from reticulum, for an lxmf address
     # NOTE: cant be async, as Reticulum doesn't await it
-    def on_lxmf_announce_received(self, aspect, destination_hash, announced_identity, app_data, announce_packet_hash):
-
+    def on_lxmf_announce_received(
+        self,
+        aspect,
+        destination_hash,
+        announced_identity,
+        app_data,
+        announce_packet_hash,
+    ):
         # check if source is blocked - drop announce and path if blocked
         identity_hash = announced_identity.hash.hex()
         if self.is_destination_blocked(identity_hash):
@@ -3664,91 +4421,144 @@ class ReticulumMeshChat:
             return
 
         # log received announce
-        print("Received an announce from " + RNS.prettyhexrep(destination_hash) + " for [lxmf.delivery]")
+        print(
+            "Received an announce from "
+            + RNS.prettyhexrep(destination_hash)
+            + " for [lxmf.delivery]",
+        )
 
         # track announce timestamp
         self.announce_timestamps.append(time.time())
 
         # upsert announce to database
-        self.db_upsert_announce(announced_identity, destination_hash, aspect, app_data, announce_packet_hash)
+        self.db_upsert_announce(
+            announced_identity, destination_hash, aspect, app_data, announce_packet_hash,
+        )
 
         # find announce from database
-        announce = database.Announce.get_or_none(database.Announce.destination_hash == destination_hash.hex())
+        announce = database.Announce.get_or_none(
+            database.Announce.destination_hash == destination_hash.hex(),
+        )
         if announce is None:
             return
 
         # send database announce to all websocket clients
-        AsyncUtils.run_async(self.websocket_broadcast(json.dumps({
-            "type": "announce",
-            "announce": self.convert_db_announce_to_dict(announce),
-        })))
+        AsyncUtils.run_async(
+            self.websocket_broadcast(
+                json.dumps(
+                    {
+                        "type": "announce",
+                        "announce": self.convert_db_announce_to_dict(announce),
+                    },
+                ),
+            ),
+        )
 
         # resend all failed messages that were intended for this destination
         if self.config.auto_resend_failed_messages_when_announce_received.get():
-            AsyncUtils.run_async(self.resend_failed_messages_for_destination(destination_hash.hex()))
+            AsyncUtils.run_async(
+                self.resend_failed_messages_for_destination(destination_hash.hex()),
+            )
 
     # handle an announce received from reticulum, for an lxmf propagation node address
     # NOTE: cant be async, as Reticulum doesn't await it
-    def on_lxmf_propagation_announce_received(self, aspect, destination_hash, announced_identity, app_data, announce_packet_hash):
-
+    def on_lxmf_propagation_announce_received(
+        self,
+        aspect,
+        destination_hash,
+        announced_identity,
+        app_data,
+        announce_packet_hash,
+    ):
         # log received announce
-        print("Received an announce from " + RNS.prettyhexrep(destination_hash) + " for [lxmf.propagation]")
+        print(
+            "Received an announce from "
+            + RNS.prettyhexrep(destination_hash)
+            + " for [lxmf.propagation]",
+        )
 
         # track announce timestamp
         self.announce_timestamps.append(time.time())
 
         # upsert announce to database
-        self.db_upsert_announce(announced_identity, destination_hash, aspect, app_data, announce_packet_hash)
+        self.db_upsert_announce(
+            announced_identity, destination_hash, aspect, app_data, announce_packet_hash,
+        )
 
         # find announce from database
-        announce = database.Announce.get_or_none(database.Announce.destination_hash == destination_hash.hex())
+        announce = database.Announce.get_or_none(
+            database.Announce.destination_hash == destination_hash.hex(),
+        )
         if announce is None:
             return
 
         # send database announce to all websocket clients
-        AsyncUtils.run_async(self.websocket_broadcast(json.dumps({
-            "type": "announce",
-            "announce": self.convert_db_announce_to_dict(announce),
-        })))
+        AsyncUtils.run_async(
+            self.websocket_broadcast(
+                json.dumps(
+                    {
+                        "type": "announce",
+                        "announce": self.convert_db_announce_to_dict(announce),
+                    },
+                ),
+            ),
+        )
 
     # resends all messages that previously failed to send to the provided destination hash
     async def resend_failed_messages_for_destination(self, destination_hash: str):
-
         # get messages that failed to send to this destination
-        failed_messages = (database.LxmfMessage.select()
-                           .where(database.LxmfMessage.state == "failed")
-                           .where(database.LxmfMessage.destination_hash == destination_hash)
-                           .order_by(database.LxmfMessage.id.asc()))
+        failed_messages = (
+            database.LxmfMessage.select()
+            .where(database.LxmfMessage.state == "failed")
+            .where(database.LxmfMessage.destination_hash == destination_hash)
+            .order_by(database.LxmfMessage.id.asc())
+        )
 
         # resend failed messages
         for failed_message in failed_messages:
             try:
-
                 # parse fields as json
                 fields = json.loads(failed_message.fields)
 
                 # parse image field
                 image_field = None
                 if "image" in fields:
-                    image_field = LxmfImageField(fields["image"]["image_type"], base64.b64decode(fields["image"]["image_bytes"]))
+                    image_field = LxmfImageField(
+                        fields["image"]["image_type"],
+                        base64.b64decode(fields["image"]["image_bytes"]),
+                    )
 
                 # parse audio field
                 audio_field = None
                 if "audio" in fields:
-                    audio_field = LxmfAudioField(fields["audio"]["audio_mode"], base64.b64decode(fields["audio"]["audio_bytes"]))
+                    audio_field = LxmfAudioField(
+                        fields["audio"]["audio_mode"],
+                        base64.b64decode(fields["audio"]["audio_bytes"]),
+                    )
 
                 # parse file attachments field
                 file_attachments_field = None
                 if "file_attachments" in fields:
                     file_attachments = []
                     for file_attachment in fields["file_attachments"]:
-                        file_attachments.append(LxmfFileAttachment(file_attachment["file_name"], base64.b64decode(file_attachment["file_bytes"])))
+                        file_attachments.append(
+                            LxmfFileAttachment(
+                                file_attachment["file_name"],
+                                base64.b64decode(file_attachment["file_bytes"]),
+                            ),
+                        )
                     file_attachments_field = LxmfFileAttachmentsField(file_attachments)
 
                 # don't resend message with attachments if not allowed
                 if not self.config.allow_auto_resending_failed_messages_with_attachments.get():
-                    if image_field is not None or audio_field is not None or file_attachments_field is not None:
-                        print("Not resending failed message with attachments, as setting is disabled")
+                    if (
+                        image_field is not None
+                        or audio_field is not None
+                        or file_attachments_field is not None
+                    ):
+                        print(
+                            "Not resending failed message with attachments, as setting is disabled",
+                        )
                         continue
 
                 # send new message with failed message content
@@ -3761,48 +4571,73 @@ class ReticulumMeshChat:
                 )
 
                 # remove original failed message from database
-                database.LxmfMessage.delete().where((database.LxmfMessage.hash == failed_message.hash)).execute()
+                database.LxmfMessage.delete().where(
+                    database.LxmfMessage.hash == failed_message.hash,
+                ).execute()
 
                 # tell all websocket clients that old failed message was deleted so it can remove from ui
-                await self.websocket_broadcast(json.dumps({
-                    "type": "lxmf_message_deleted",
-                    "hash": failed_message.hash,
-                }))
+                await self.websocket_broadcast(
+                    json.dumps(
+                        {
+                            "type": "lxmf_message_deleted",
+                            "hash": failed_message.hash,
+                        },
+                    ),
+                )
 
             except Exception as e:
                 print("Error resending failed message: " + str(e))
-                pass
-
 
     # handle an announce received from reticulum, for a nomadnet node
     # NOTE: cant be async, as Reticulum doesn't await it
-    def on_nomadnet_node_announce_received(self, aspect, destination_hash, announced_identity, app_data, announce_packet_hash):
-
+    def on_nomadnet_node_announce_received(
+        self,
+        aspect,
+        destination_hash,
+        announced_identity,
+        app_data,
+        announce_packet_hash,
+    ):
         # log received announce
-        print("Received an announce from " + RNS.prettyhexrep(destination_hash) + " for [nomadnetwork.node]")
+        print(
+            "Received an announce from "
+            + RNS.prettyhexrep(destination_hash)
+            + " for [nomadnetwork.node]",
+        )
 
         # track announce timestamp
         self.announce_timestamps.append(time.time())
 
         # upsert announce to database
-        self.db_upsert_announce(announced_identity, destination_hash, aspect, app_data, announce_packet_hash)
+        self.db_upsert_announce(
+            announced_identity, destination_hash, aspect, app_data, announce_packet_hash,
+        )
 
         # find announce from database
-        announce = database.Announce.get_or_none(database.Announce.destination_hash == destination_hash.hex())
+        announce = database.Announce.get_or_none(
+            database.Announce.destination_hash == destination_hash.hex(),
+        )
         if announce is None:
             return
 
         # send database announce to all websocket clients
-        AsyncUtils.run_async(self.websocket_broadcast(json.dumps({
-            "type": "announce",
-            "announce": self.convert_db_announce_to_dict(announce),
-        })))
+        AsyncUtils.run_async(
+            self.websocket_broadcast(
+                json.dumps(
+                    {
+                        "type": "announce",
+                        "announce": self.convert_db_announce_to_dict(announce),
+                    },
+                ),
+            ),
+        )
 
     # gets the custom display name a user has set for the provided destination hash
     def get_custom_destination_display_name(self, destination_hash: str):
-
         # get display name from database
-        db_destination_display_name = database.CustomDestinationDisplayName.get_or_none(database.CustomDestinationDisplayName.destination_hash == destination_hash)
+        db_destination_display_name = database.CustomDestinationDisplayName.get_or_none(
+            database.CustomDestinationDisplayName.destination_hash == destination_hash,
+        )
         if db_destination_display_name is not None:
             return db_destination_display_name.display_name
 
@@ -3812,12 +4647,13 @@ class ReticulumMeshChat:
     # currently, this will use the app data from the most recent announce
     # TODO: we should fetch this from our contacts database, when it gets implemented, and if not found, fallback to app data
     def get_lxmf_conversation_name(self, destination_hash):
-
         # get lxmf.delivery announce from database for the provided destination hash
-        lxmf_announce = (database.Announce.select()
-                         .where(database.Announce.aspect == "lxmf.delivery")
-                         .where(database.Announce.destination_hash == destination_hash)
-                         .get_or_none())
+        lxmf_announce = (
+            database.Announce.select()
+            .where(database.Announce.aspect == "lxmf.delivery")
+            .where(database.Announce.destination_hash == destination_hash)
+            .get_or_none()
+        )
 
         # if app data is available in database, it should be base64 encoded text that was announced
         # we will return the parsed lxmf display name as the conversation name
@@ -3828,8 +4664,9 @@ class ReticulumMeshChat:
         return "Anonymous Peer"
 
     # reads the lxmf display name from the provided base64 app data
-    def parse_lxmf_display_name(self, app_data_base64: str, default_value: str | None = "Anonymous Peer"):
-
+    def parse_lxmf_display_name(
+        self, app_data_base64: str, default_value: str | None = "Anonymous Peer",
+    ):
         try:
             app_data_bytes = base64.b64decode(app_data_base64)
             display_name = LXMF.display_name_from_app_data(app_data_bytes)
@@ -3849,7 +4686,9 @@ class ReticulumMeshChat:
             return None
 
     # reads the nomadnetwork node display name from the provided base64 app data
-    def parse_nomadnetwork_node_display_name(self, app_data_base64: str, default_value: str | None = "Anonymous Node"):
+    def parse_nomadnetwork_node_display_name(
+        self, app_data_base64: str, default_value: str | None = "Anonymous Node",
+    ):
         try:
             app_data_bytes = base64.b64decode(app_data_base64)
             return app_data_bytes.decode("utf-8")
@@ -3871,17 +4710,22 @@ class ReticulumMeshChat:
 
     # returns true if the conversation has messages newer than the last read at timestamp
     def is_lxmf_conversation_unread(self, destination_hash):
-
         # get lxmf conversation read state from database for the provided destination hash
-        lxmf_conversation_read_state = (database.LxmfConversationReadState.select()
-                         .where(database.LxmfConversationReadState.destination_hash == destination_hash)
-                         .get_or_none())
+        lxmf_conversation_read_state = (
+            database.LxmfConversationReadState.select()
+            .where(
+                database.LxmfConversationReadState.destination_hash == destination_hash,
+            )
+            .get_or_none()
+        )
 
         # get most recent incoming message from destination hash
-        latest_incoming_lxmf_message = (database.LxmfMessage.select()
-                        .where(database.LxmfMessage.source_hash == destination_hash)
-                        .order_by(database.LxmfMessage.created_at.desc())
-                        .get_or_none())
+        latest_incoming_lxmf_message = (
+            database.LxmfMessage.select()
+            .where(database.LxmfMessage.source_hash == destination_hash)
+            .order_by(database.LxmfMessage.created_at.desc())
+            .get_or_none()
+        )
 
         # there's no incoming message, so it can't be unread
         if latest_incoming_lxmf_message is None:
@@ -3892,16 +4736,22 @@ class ReticulumMeshChat:
             return True
 
         # conversation is unread if last read at is before the latest incoming message creation date
-        conversation_last_read_at = datetime.strptime(lxmf_conversation_read_state.last_read_at, "%Y-%m-%d %H:%M:%S.%f%z")
-        conversation_latest_message_at = datetime.strptime(latest_incoming_lxmf_message.created_at, "%Y-%m-%d %H:%M:%S.%f%z")
+        conversation_last_read_at = datetime.strptime(
+            lxmf_conversation_read_state.last_read_at, "%Y-%m-%d %H:%M:%S.%f%z",
+        )
+        conversation_latest_message_at = datetime.strptime(
+            latest_incoming_lxmf_message.created_at, "%Y-%m-%d %H:%M:%S.%f%z",
+        )
         return conversation_last_read_at < conversation_latest_message_at
 
     # returns number of messages that failed to send in a conversation
     def lxmf_conversation_failed_messages_count(self, destination_hash: str):
-        return (database.LxmfMessage.select()
-                .where(database.LxmfMessage.state == "failed")
-                .where(database.LxmfMessage.destination_hash == destination_hash)
-                .count())
+        return (
+            database.LxmfMessage.select()
+            .where(database.LxmfMessage.state == "failed")
+            .where(database.LxmfMessage.destination_hash == destination_hash)
+            .count()
+        )
 
     # find an interface by name
     def find_interface_by_name(self, name: str):
@@ -3912,12 +4762,11 @@ class ReticulumMeshChat:
 
         return None
 
+
 # class to manage config stored in database
 class Config:
-
     @staticmethod
     def get(key: str, default_value=None) -> str | None:
-
         # get config value from database
         config_item = database.Config.get_or_none(database.Config.key == key)
 
@@ -3930,7 +4779,6 @@ class Config:
 
     @staticmethod
     def set(key: str, value: str | None):
-
         # if none, delete the config entry
         if value is None:
             database.Config.delete().where(database.Config.key == key).execute()
@@ -3950,7 +4798,6 @@ class Config:
 
     # handle config values that should be strings
     class StringConfig:
-
         def __init__(self, key: str, default_value: str | None = None):
             self.key = key
             self.default_value = default_value
@@ -3964,13 +4811,11 @@ class Config:
 
     # handle config values that should be bools
     class BoolConfig:
-
         def __init__(self, key: str, default_value: bool = False):
             self.key = key
             self.default_value = default_value
 
         def get(self) -> bool:
-
             # get string value, or return default
             config_value = Config.get(self.key, default_value=None)
             if config_value is None:
@@ -3979,7 +4824,6 @@ class Config:
             return config_value == "true"
 
         def set(self, value: bool):
-
             # determine string value for bool
             if value is True:
                 config_value = "true"
@@ -3990,13 +4834,11 @@ class Config:
 
     # handle config values that should be integers
     class IntConfig:
-
         def __init__(self, key: str, default_value: int | None = 0):
             self.key = key
             self.default_value = default_value
 
         def get(self) -> int | None:
-
             # get string value, or return default
             config_value = Config.get(self.key, default_value=None)
             if config_value is None:
@@ -4014,24 +4856,63 @@ class Config:
     auto_announce_interval_seconds = IntConfig("auto_announce_interval_seconds", 0)
     last_announced_at = IntConfig("last_announced_at", None)
     theme = StringConfig("theme", "light")
-    auto_resend_failed_messages_when_announce_received = BoolConfig("auto_resend_failed_messages_when_announce_received", True)
-    allow_auto_resending_failed_messages_with_attachments = BoolConfig("allow_auto_resending_failed_messages_with_attachments", False)
-    auto_send_failed_messages_to_propagation_node = BoolConfig("auto_send_failed_messages_to_propagation_node", False)
-    show_suggested_community_interfaces = BoolConfig("show_suggested_community_interfaces", True)
-    lxmf_delivery_transfer_limit_in_bytes = IntConfig("lxmf_delivery_transfer_limit_in_bytes", 1000 * 1000 * 10)  # 10MB
-    lxmf_preferred_propagation_node_destination_hash = StringConfig("lxmf_preferred_propagation_node_destination_hash", None)
-    lxmf_preferred_propagation_node_auto_sync_interval_seconds = IntConfig("lxmf_preferred_propagation_node_auto_sync_interval_seconds", 0)
-    lxmf_preferred_propagation_node_last_synced_at = IntConfig("lxmf_preferred_propagation_node_last_synced_at", None)
-    lxmf_local_propagation_node_enabled = BoolConfig("lxmf_local_propagation_node_enabled", False)
+    auto_resend_failed_messages_when_announce_received = BoolConfig(
+        "auto_resend_failed_messages_when_announce_received", True,
+    )
+    allow_auto_resending_failed_messages_with_attachments = BoolConfig(
+        "allow_auto_resending_failed_messages_with_attachments", False,
+    )
+    auto_send_failed_messages_to_propagation_node = BoolConfig(
+        "auto_send_failed_messages_to_propagation_node", False,
+    )
+    show_suggested_community_interfaces = BoolConfig(
+        "show_suggested_community_interfaces", True,
+    )
+    lxmf_delivery_transfer_limit_in_bytes = IntConfig(
+        "lxmf_delivery_transfer_limit_in_bytes", 1000 * 1000 * 10,
+    )  # 10MB
+    lxmf_preferred_propagation_node_destination_hash = StringConfig(
+        "lxmf_preferred_propagation_node_destination_hash", None,
+    )
+    lxmf_preferred_propagation_node_auto_sync_interval_seconds = IntConfig(
+        "lxmf_preferred_propagation_node_auto_sync_interval_seconds", 0,
+    )
+    lxmf_preferred_propagation_node_last_synced_at = IntConfig(
+        "lxmf_preferred_propagation_node_last_synced_at", None,
+    )
+    lxmf_local_propagation_node_enabled = BoolConfig(
+        "lxmf_local_propagation_node_enabled", False,
+    )
     lxmf_user_icon_name = StringConfig("lxmf_user_icon_name", None)
-    lxmf_user_icon_foreground_colour = StringConfig("lxmf_user_icon_foreground_colour", None)
-    lxmf_user_icon_background_colour = StringConfig("lxmf_user_icon_background_colour", None)
+    lxmf_user_icon_foreground_colour = StringConfig(
+        "lxmf_user_icon_foreground_colour", None,
+    )
+    lxmf_user_icon_background_colour = StringConfig(
+        "lxmf_user_icon_background_colour", None,
+    )
+    lxmf_inbound_stamp_cost = IntConfig(
+        "lxmf_inbound_stamp_cost", 8,
+    )  # for direct delivery messages
+    lxmf_propagation_node_stamp_cost = IntConfig(
+        "lxmf_propagation_node_stamp_cost", 16,
+    )  # for propagation node messages
+
 
 # FIXME: we should probably set this as an instance variable of ReticulumMeshChat so it has a proper home, and pass it in to the constructor?
 nomadnet_cached_links = {}
-class NomadnetDownloader:
 
-    def __init__(self, destination_hash: bytes, path: str, data: str|None, on_download_success: Callable[[RNS.RequestReceipt], None], on_download_failure: Callable[[str], None], on_progress_update: Callable[[float], None], timeout: int|None = None):
+
+class NomadnetDownloader:
+    def __init__(
+        self,
+        destination_hash: bytes,
+        path: str,
+        data: str | None,
+        on_download_success: Callable[[RNS.RequestReceipt], None],
+        on_download_failure: Callable[[str], None],
+        on_progress_update: Callable[[float], None],
+        timeout: int | None = None,
+    ):
         self.app_name = "nomadnetwork"
         self.aspects = "node"
         self.destination_hash = destination_hash
@@ -4048,7 +4929,7 @@ class NomadnetDownloader:
     # cancel the download
     def cancel(self):
         self.is_cancelled = True
-        
+
         # cancel the request if it exists
         if self.request_receipt is not None:
             try:
@@ -4067,8 +4948,9 @@ class NomadnetDownloader:
         self.on_download_failure("cancelled")
 
     # setup link to destination and request download
-    async def download(self, path_lookup_timeout: int = 15, link_establishment_timeout: int = 15):
-
+    async def download(
+        self, path_lookup_timeout: int = 15, link_establishment_timeout: int = 15,
+    ):
         # check if cancelled before starting
         if self.is_cancelled:
             return
@@ -4086,12 +4968,14 @@ class NomadnetDownloader:
 
         # check if we have a path to the destination
         if not RNS.Transport.has_path(self.destination_hash):
-
             # we don't have a path, so we need to request it
             RNS.Transport.request_path(self.destination_hash)
 
             # wait until we have a path, or give up after the configured timeout
-            while not RNS.Transport.has_path(self.destination_hash) and time.time() < timeout_after_seconds:
+            while (
+                not RNS.Transport.has_path(self.destination_hash)
+                and time.time() < timeout_after_seconds
+            ):
                 # check if cancelled during path lookup
                 if self.is_cancelled:
                     return
@@ -4125,7 +5009,9 @@ class NomadnetDownloader:
         timeout_after_seconds = time.time() + link_establishment_timeout
 
         # wait until we have established a link, or give up after the configured timeout
-        while link.status is not RNS.Link.ACTIVE and time.time() < timeout_after_seconds:
+        while (
+            link.status is not RNS.Link.ACTIVE and time.time() < timeout_after_seconds
+        ):
             # check if cancelled during link establishment
             if self.is_cancelled:
                 return
@@ -4137,7 +5023,6 @@ class NomadnetDownloader:
 
     # link to destination was established, we should now request the download
     def link_established(self, link):
-
         # check if cancelled before requesting
         if self.is_cancelled:
             return
@@ -4169,11 +5054,27 @@ class NomadnetDownloader:
 
 
 class NomadnetPageDownloader(NomadnetDownloader):
-
-    def __init__(self, destination_hash: bytes, page_path: str, data: str | None, on_page_download_success: Callable[[str], None], on_page_download_failure: Callable[[str], None], on_progress_update: Callable[[float], None], timeout: int|None = None):
+    def __init__(
+        self,
+        destination_hash: bytes,
+        page_path: str,
+        data: str | None,
+        on_page_download_success: Callable[[str], None],
+        on_page_download_failure: Callable[[str], None],
+        on_progress_update: Callable[[float], None],
+        timeout: int | None = None,
+    ):
         self.on_page_download_success = on_page_download_success
         self.on_page_download_failure = on_page_download_failure
-        super().__init__(destination_hash, page_path, data, self.on_download_success, self.on_download_failure, on_progress_update, timeout)
+        super().__init__(
+            destination_hash,
+            page_path,
+            data,
+            self.on_download_success,
+            self.on_download_failure,
+            on_progress_update,
+            timeout,
+        )
 
     # page download was successful, decode the response and send to provided callback
     def on_download_success(self, request_receipt: RNS.RequestReceipt):
@@ -4186,21 +5087,34 @@ class NomadnetPageDownloader(NomadnetDownloader):
 
 
 class NomadnetFileDownloader(NomadnetDownloader):
-
-    def __init__(self, destination_hash: bytes, page_path: str, on_file_download_success: Callable[[str, bytes], None], on_file_download_failure: Callable[[str], None], on_progress_update: Callable[[float], None], timeout: int|None = None):
+    def __init__(
+        self,
+        destination_hash: bytes,
+        page_path: str,
+        on_file_download_success: Callable[[str, bytes], None],
+        on_file_download_failure: Callable[[str], None],
+        on_progress_update: Callable[[float], None],
+        timeout: int | None = None,
+    ):
         self.on_file_download_success = on_file_download_success
         self.on_file_download_failure = on_file_download_failure
-        super().__init__(destination_hash, page_path, None, self.on_download_success, self.on_download_failure, on_progress_update, timeout)
+        super().__init__(
+            destination_hash,
+            page_path,
+            None,
+            self.on_download_success,
+            self.on_download_failure,
+            on_progress_update,
+            timeout,
+        )
 
     # file download was successful, decode the response and send to provided callback
     def on_download_success(self, request_receipt: RNS.RequestReceipt):
-
         # get response
         response = request_receipt.response
 
         # handle buffered reader response
         if isinstance(response, io.BufferedReader):
-
             # get file name from metadata
             file_name = "downloaded_file"
             metadata = request_receipt.metadata
@@ -4217,7 +5131,6 @@ class NomadnetFileDownloader(NomadnetDownloader):
         # check for list response with bytes in position 0, and metadata dict in position 1
         # e.g: [file_bytes, {name: "filename.ext"}]
         if isinstance(response, list) and isinstance(response[1], dict):
-
             file_data: bytes = response[0]
             metadata: dict = response[1]
 
@@ -4246,20 +5159,65 @@ class NomadnetFileDownloader(NomadnetDownloader):
 
 
 def main():
-
     # parse command line args
     parser = argparse.ArgumentParser(description="ReticulumMeshChat")
-    parser.add_argument("--host", nargs='?', default="127.0.0.1", type=str, help="The address the web server should listen on.")
-    parser.add_argument("--port", nargs='?', default="8000", type=int, help="The port the web server should listen on.")
-    parser.add_argument("--headless", action='store_true', help="Web browser will not automatically launch when this flag is passed.")
-    parser.add_argument("--identity-file", type=str, help="Path to a Reticulum Identity file to use as your LXMF address.")
-    parser.add_argument("--identity-base64", type=str, help="A base64 encoded Reticulum Identity to use as your LXMF address.")
-    parser.add_argument("--generate-identity-file", type=str, help="Generates and saves a new Reticulum Identity to the provided file path and then exits.")
-    parser.add_argument("--generate-identity-base64", action='store_true', help="Outputs a randomly generated Reticulum Identity as base64 and then exits.")
-    parser.add_argument("--reticulum-config-dir", type=str, help="Path to a Reticulum config directory for the RNS stack to use (e.g: ~/.reticulum)")
-    parser.add_argument("--storage-dir", type=str, help="Path to a directory for storing databases and config files (default: ./storage)")
-    parser.add_argument("--test-exception-message", type=str, help="Throws an exception. Used for testing the electron error dialog")
-    parser.add_argument('args', nargs=argparse.REMAINDER)  # allow unknown command line args
+    parser.add_argument(
+        "--host",
+        nargs="?",
+        default="127.0.0.1",
+        type=str,
+        help="The address the web server should listen on.",
+    )
+    parser.add_argument(
+        "--port",
+        nargs="?",
+        default="8000",
+        type=int,
+        help="The port the web server should listen on.",
+    )
+    parser.add_argument(
+        "--headless",
+        action="store_true",
+        help="Web browser will not automatically launch when this flag is passed.",
+    )
+    parser.add_argument(
+        "--identity-file",
+        type=str,
+        help="Path to a Reticulum Identity file to use as your LXMF address.",
+    )
+    parser.add_argument(
+        "--identity-base64",
+        type=str,
+        help="A base64 encoded Reticulum Identity to use as your LXMF address.",
+    )
+    parser.add_argument(
+        "--generate-identity-file",
+        type=str,
+        help="Generates and saves a new Reticulum Identity to the provided file path and then exits.",
+    )
+    parser.add_argument(
+        "--generate-identity-base64",
+        action="store_true",
+        help="Outputs a randomly generated Reticulum Identity as base64 and then exits.",
+    )
+    parser.add_argument(
+        "--reticulum-config-dir",
+        type=str,
+        help="Path to a Reticulum config directory for the RNS stack to use (e.g: ~/.reticulum)",
+    )
+    parser.add_argument(
+        "--storage-dir",
+        type=str,
+        help="Path to a directory for storing databases and config files (default: ./storage)",
+    )
+    parser.add_argument(
+        "--test-exception-message",
+        type=str,
+        help="Throws an exception. Used for testing the electron error dialog",
+    )
+    parser.add_argument(
+        "args", nargs=argparse.REMAINDER,
+    )  # allow unknown command line args
     args = parser.parse_args()
 
     # check if we want to test exception messages
@@ -4268,10 +5226,11 @@ def main():
 
     # util to generate reticulum identity and save to file without using rnid
     if args.generate_identity_file is not None:
-
         # do not overwrite existing files, otherwise user could lose existing keys
         if os.path.exists(args.generate_identity_file):
-            print("DANGER: the provided identity file path already exists, not overwriting!")
+            print(
+                "DANGER: the provided identity file path already exists, not overwriting!",
+            )
             return
 
         # generate a new identity and save to provided file path
@@ -4279,7 +5238,9 @@ def main():
         with open(args.generate_identity_file, "wb") as file:
             file.write(identity.get_private_key())
 
-        print("A new Reticulum Identity has been saved to: {}".format(args.generate_identity_file))
+        print(
+            f"A new Reticulum Identity has been saved to: {args.generate_identity_file}",
+        )
         return
 
     # util to generate reticulum identity as base64 without using rnid
@@ -4292,13 +5253,16 @@ def main():
     if args.identity_file is not None:
         identity = RNS.Identity(create_keys=False)
         identity.load(args.identity_file)
-        print("Reticulum Identity <{}> has been loaded from file {}.".format(identity.hash.hex(), args.identity_file))
+        print(
+            f"Reticulum Identity <{identity.hash.hex()}> has been loaded from file {args.identity_file}.",
+        )
     elif args.identity_base64 is not None:
         identity = RNS.Identity(create_keys=False)
         identity.load_private_key(base64.b64decode(args.identity_base64))
-        print("Reticulum Identity <{}> has been loaded from base64.".format(identity.hash.hex()))
+        print(
+            f"Reticulum Identity <{identity.hash.hex()}> has been loaded from base64.",
+        )
     else:
-
         # ensure provided storage dir exists, or the default storage dir exists
         base_storage_dir = args.storage_dir or os.path.join("storage")
         os.makedirs(base_storage_dir, exist_ok=True)
@@ -4311,15 +5275,21 @@ def main():
             identity = RNS.Identity(create_keys=True)
             with open(default_identity_file, "wb") as file:
                 file.write(identity.get_private_key())
-            print("Reticulum Identity <{}> has been randomly generated and saved to {}.".format(identity.hash.hex(), default_identity_file))
+            print(
+                f"Reticulum Identity <{identity.hash.hex()}> has been randomly generated and saved to {default_identity_file}.",
+            )
 
         # default identity file exists, load it
         identity = RNS.Identity(create_keys=False)
         identity.load(default_identity_file)
-        print("Reticulum Identity <{}> has been loaded from file {}.".format(identity.hash.hex(), default_identity_file))
+        print(
+            f"Reticulum Identity <{identity.hash.hex()}> has been loaded from file {default_identity_file}.",
+        )
 
     # init app
-    reticulum_meshchat = ReticulumMeshChat(identity, args.storage_dir, args.reticulum_config_dir)
+    reticulum_meshchat = ReticulumMeshChat(
+        identity, args.storage_dir, args.reticulum_config_dir,
+    )
     reticulum_meshchat.run(args.host, args.port, launch_browser=args.headless is False)
 
 

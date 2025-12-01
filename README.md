@@ -5,11 +5,11 @@ A heavily customized fork of [Reticulum MeshChat](https://github.com/liamcottle/
 ## Features of this fork
 
 - [x] Custom UI/UX (actively being improved)
-- [ ] Ability to set stamps
+- [x] Ability to set inbound and propagation node stamps
 - [x] Better config parsing
 - [x] Cancel page fetching or file downloads
-- [ ] Block users
-- [ ] Spam filter (based on keywords)
+- [x] Block users
+- [x] Spam filter (based on keywords)
 - [ ] Multi-identity support
 - [x] More stats on about page
 - [x] Actions are pinned to full-length SHA hashes.

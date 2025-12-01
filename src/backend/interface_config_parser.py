@@ -2,10 +2,8 @@ import RNS.vendor.configobj
 
 
 class InterfaceConfigParser:
-
     @staticmethod
     def parse(text):
-
         # get lines from provided text
         lines = text.splitlines()
         stripped_lines = [line.strip() for line in lines]
@@ -30,7 +28,6 @@ class InterfaceConfigParser:
         # process interfaces
         interfaces = []
         for interface_name in config_interfaces:
-
             # ensure interface has a name
             interface_config = config_interfaces[interface_name]
             interface_config["name"] = interface_name

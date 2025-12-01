@@ -8,7 +8,6 @@ from websockets.sync.connection import Connection
 
 
 class WebsocketClientInterface(Interface):
-
     # TODO: required?
     DEFAULT_IFAC_SIZE = 16
 
@@ -18,7 +17,6 @@ class WebsocketClientInterface(Interface):
         return f"WebsocketClientInterface[{self.name}/{self.target_url}]"
 
     def __init__(self, owner, configuration, websocket: Connection = None):
-
         super().__init__()
 
         self.owner = owner
@@ -26,8 +24,8 @@ class WebsocketClientInterface(Interface):
 
         self.IN = True
         self.OUT = False
-        self.HW_MTU = 262144 # 256KiB
-        self.bitrate = 1_000_000_000 # 1Gbps
+        self.HW_MTU = 262144  # 256KiB
+        self.bitrate = 1_000_000_000  # 1Gbps
         self.mode = RNS.Interfaces.Interface.Interface.MODE_FULL
 
         # parse config
@@ -48,7 +46,6 @@ class WebsocketClientInterface(Interface):
 
     # called when a full packet has been received over the websocket
     def process_incoming(self, data):
-
         # do nothing if offline or detached
         if not self.online or self.detached:
             return
@@ -65,7 +62,6 @@ class WebsocketClientInterface(Interface):
 
     # the running reticulum transport instance will call this method whenever the interface must transmit a packet
     def process_outgoing(self, data):
-
         # do nothing if offline or detached
         if not self.online or self.detached:
             return
@@ -74,8 +70,10 @@ class WebsocketClientInterface(Interface):
         try:
             self.websocket.send(data)
         except Exception as e:
-            RNS.log(f"Exception occurred while transmitting via {str(self)}", RNS.LOG_ERROR)
-            RNS.log(f"The contained exception was: {str(e)}", RNS.LOG_ERROR)
+            RNS.log(
+                f"Exception occurred while transmitting via {self!s}", RNS.LOG_ERROR,
+            )
+            RNS.log(f"The contained exception was: {e!s}", RNS.LOG_ERROR)
             return
 
         # update sent bytes counter
@@ -87,27 +85,27 @@ class WebsocketClientInterface(Interface):
 
     # connect to the configured websocket server
     def connect(self):
-
         # do nothing if interface is detached
         if self.detached:
             return
 
         # connect to websocket server
         try:
-            RNS.log(f"Connecting to Websocket for {str(self)}...", RNS.LOG_DEBUG)
-            self.websocket = connect(f"{self.target_url}", max_size=None, compression=None)
-            RNS.log(f"Connected to Websocket for {str(self)}", RNS.LOG_DEBUG)
+            RNS.log(f"Connecting to Websocket for {self!s}...", RNS.LOG_DEBUG)
+            self.websocket = connect(
+                f"{self.target_url}", max_size=None, compression=None,
+            )
+            RNS.log(f"Connected to Websocket for {self!s}", RNS.LOG_DEBUG)
             self.read_loop()
         except Exception as e:
             RNS.log(f"{self} failed with error: {e}", RNS.LOG_ERROR)
 
         # auto reconnect after delay
-        RNS.log(f"Websocket disconnected for {str(self)}...", RNS.LOG_DEBUG)
+        RNS.log(f"Websocket disconnected for {self!s}...", RNS.LOG_DEBUG)
         time.sleep(self.RECONNECT_DELAY_SECONDS)
         self.connect()
 
     def read_loop(self):
-
         self.online = True
 
         try:
@@ -119,7 +117,6 @@ class WebsocketClientInterface(Interface):
         self.online = False
 
     def detach(self):
-
         # mark as offline
         self.online = False
 
@@ -129,6 +126,7 @@ class WebsocketClientInterface(Interface):
 
         # mark as detached
         self.detached = True
+
 
 # set interface class RNS should use when importing this external interface
 interface_class = WebsocketClientInterface

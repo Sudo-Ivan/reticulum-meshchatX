@@ -1,11 +1,10 @@
 import asyncio
 import time
-from typing import List
 
 import RNS
 
-# todo optionally identity self over link
-# todo allowlist/denylist for incoming calls
+# TODO optionally identity self over link
+# TODO allowlist/denylist for incoming calls
 
 
 class CallFailedException(Exception):
@@ -13,7 +12,6 @@ class CallFailedException(Exception):
 
 
 class AudioCall:
-
     def __init__(self, link: RNS.Link, is_outbound: bool):
         self.link = link
         self.is_outbound = is_outbound
@@ -41,21 +39,25 @@ class AudioCall:
 
     # handle packet received over link
     def on_packet(self, message, packet):
-
         # send audio received from call initiator to all audio packet listeners
         for audio_packet_listener in self.audio_packet_listeners:
             audio_packet_listener(message)
 
     # send an audio packet over the link
     def send_audio_packet(self, data):
-
         # do nothing if link is not active
         if self.is_active() is False:
             return
 
         # drop audio packet if it is too big to send
         if len(data) > RNS.Link.MDU:
-            print("[AudioCall] dropping audio packet " + str(len(data)) + " bytes exceeds the link packet MDU of " + str(RNS.Link.MDU) + " bytes")
+            print(
+                "[AudioCall] dropping audio packet "
+                + str(len(data))
+                + " bytes exceeds the link packet MDU of "
+                + str(RNS.Link.MDU)
+                + " bytes",
+            )
             return
 
         # send codec2 audio received from call receiver to call initiator over reticulum link
@@ -73,13 +75,10 @@ class AudioCall:
     def hangup(self):
         print("[AudioCall] hangup")
         self.link.teardown()
-        pass
 
 
 class AudioCallManager:
-
     def __init__(self, identity: RNS.Identity, is_destination_blocked_callback=None):
-
         self.identity = identity
         self.on_incoming_call_callback = None
         self.on_outgoing_call_callback = None
@@ -87,12 +86,15 @@ class AudioCallManager:
         self.audio_call_receiver = AudioCallReceiver(manager=self)
 
         # remember audio calls
-        self.audio_calls: List[AudioCall] = []
+        self.audio_calls: list[AudioCall] = []
 
     # announces the audio call destination
     def announce(self, app_data=None):
         self.audio_call_receiver.destination.announce(app_data)
-        print("[AudioCallManager] announced destination: " + RNS.prettyhexrep(self.audio_call_receiver.destination.hash))
+        print(
+            "[AudioCallManager] announced destination: "
+            + RNS.prettyhexrep(self.audio_call_receiver.destination.hash),
+        )
 
     # set the callback for incoming calls
     def register_incoming_call_callback(self, callback):
@@ -104,7 +106,6 @@ class AudioCallManager:
 
     # handle incoming calls from audio call receiver
     def handle_incoming_call(self, audio_call: AudioCall):
-
         # remember it
         self.audio_calls.append(audio_call)
 
@@ -114,7 +115,6 @@ class AudioCallManager:
 
     # handle outgoing calls
     def handle_outgoing_call(self, audio_call: AudioCall):
-
         # remember it
         self.audio_calls.append(audio_call)
 
@@ -143,22 +143,24 @@ class AudioCallManager:
     def hangup_all(self):
         for audio_call in self.audio_calls:
             audio_call.hangup()
-        return None
 
     # attempts to initiate a call to the provided destination and returns the link hash on success
-    async def initiate(self, destination_hash: bytes, timeout_seconds: int = 15) -> AudioCall:
-
+    async def initiate(
+        self, destination_hash: bytes, timeout_seconds: int = 15,
+    ) -> AudioCall:
         # determine when to timeout
         timeout_after_seconds = time.time() + timeout_seconds
 
         # check if we have a path to the destination
         if not RNS.Transport.has_path(destination_hash):
-
             # we don't have a path, so we need to request it
             RNS.Transport.request_path(destination_hash)
 
             # wait until we have a path, or give up after the configured timeout
-            while not RNS.Transport.has_path(destination_hash) and time.time() < timeout_after_seconds:
+            while (
+                not RNS.Transport.has_path(destination_hash)
+                and time.time() < timeout_after_seconds
+            ):
                 await asyncio.sleep(0.1)
 
         # if we still don't have a path, we can't establish a link, so bail out
@@ -172,14 +174,16 @@ class AudioCallManager:
             RNS.Destination.OUT,
             RNS.Destination.SINGLE,
             "call",
-            "audio"
+            "audio",
         )
 
         # create link
         link = RNS.Link(server_destination)
 
         # wait until we have established a link, or give up after the configured timeout
-        while link.status is not RNS.Link.ACTIVE and time.time() < timeout_after_seconds:
+        while (
+            link.status is not RNS.Link.ACTIVE and time.time() < timeout_after_seconds
+        ):
             await asyncio.sleep(0.1)
 
         # if we still haven't established a link, bail out
@@ -192,16 +196,14 @@ class AudioCallManager:
         # handle new outgoing call
         self.handle_outgoing_call(audio_call)
 
-        # todo: this can be optional, it's only being sent by default for ui, can be removed
+        # TODO: this can be optional, it's only being sent by default for ui, can be removed
         link.identify(self.identity)
 
         return audio_call
 
 
 class AudioCallReceiver:
-
     def __init__(self, manager: AudioCallManager):
-
         self.manager = manager
 
         # create destination for receiving audio calls
@@ -225,7 +227,6 @@ class AudioCallReceiver:
 
     # client connected to us, set up an audio call instance
     def client_connected(self, link: RNS.Link):
-
         # check if source is blocked
         if self.manager.is_destination_blocked_callback is not None:
             try:
@@ -234,14 +235,16 @@ class AudioCallReceiver:
                 if remote_identity is not None:
                     source_hash = remote_identity.hash.hex()
                     if self.manager.is_destination_blocked_callback(source_hash):
-                        print(f"Rejecting audio call from blocked source: {source_hash}")
+                        print(
+                            f"Rejecting audio call from blocked source: {source_hash}",
+                        )
                         link.teardown()
                         return
             except:
                 # if we can't get identity yet, we'll check later
                 pass
 
-        # todo: this can be optional, it's only being sent by default for ui, can be removed
+        # TODO: this can be optional, it's only being sent by default for ui, can be removed
         link.identify(self.manager.identity)
 
         # create audio call

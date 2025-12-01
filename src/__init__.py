@@ -7,7 +7,6 @@ import sys
 
 # this class forces stream writes to be flushed immediately
 class ImmediateFlushingStreamWrapper:
-
     def __init__(self, stream):
         self.stream = stream
 

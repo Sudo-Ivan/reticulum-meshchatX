@@ -161,6 +161,13 @@
                                 <span class="setting-toggle__description">Failed direct deliveries are queued on your preferred propagation node.</span>
                             </span>
                         </label>
+                        <div class="space-y-2">
+                            <div class="text-sm font-medium text-gray-900 dark:text-gray-100">Inbound Message Stamp Cost</div>
+                            <input v-model.number="config.lxmf_inbound_stamp_cost" @input="onLxmfInboundStampCostChange" type="number" min="1" max="254" placeholder="8" class="input-field">
+                            <div class="text-xs text-gray-600 dark:text-gray-400">
+                                Require proof-of-work stamps for direct delivery messages sent to you. Higher values require more computational work from senders. Range: 1-254. Default: 8.
+                            </div>
+                        </div>
                     </div>
                 </section>
 
@@ -212,6 +219,13 @@
                             <div class="text-xs text-gray-600 dark:text-gray-400">
                                 <span v-if="config.lxmf_preferred_propagation_node_last_synced_at">Last synced {{ formatSecondsAgo(config.lxmf_preferred_propagation_node_last_synced_at) }} ago.</span>
                                 <span v-else>Last synced: never.</span>
+                            </div>
+                        </div>
+                        <div v-if="config.lxmf_local_propagation_node_enabled" class="space-y-2">
+                            <div class="text-sm font-medium text-gray-900 dark:text-gray-100">Propagation Node Stamp Cost</div>
+                            <input v-model.number="config.lxmf_propagation_node_stamp_cost" @input="onLxmfPropagationNodeStampCostChange" type="number" min="13" max="254" placeholder="16" class="input-field">
+                            <div class="text-xs text-gray-600 dark:text-gray-400">
+                                Require proof-of-work stamps for messages propagated through your node. Higher values require more computational work. Range: 13-254. Default: 16. <strong>Note:</strong> Changing this requires restarting the app.
                             </div>
                         </div>
                     </div>
@@ -348,6 +362,16 @@ export default {
         async onLxmfPreferredPropagationNodeAutoSyncIntervalSecondsChange() {
             await this.updateConfig({
                 "lxmf_preferred_propagation_node_auto_sync_interval_seconds": this.config.lxmf_preferred_propagation_node_auto_sync_interval_seconds,
+            });
+        },
+        async onLxmfInboundStampCostChange() {
+            await this.updateConfig({
+                "lxmf_inbound_stamp_cost": this.config.lxmf_inbound_stamp_cost,
+            });
+        },
+        async onLxmfPropagationNodeStampCostChange() {
+            await this.updateConfig({
+                "lxmf_propagation_node_stamp_cost": this.config.lxmf_propagation_node_stamp_cost,
             });
         },
         async onIsTransportEnabledChange() {

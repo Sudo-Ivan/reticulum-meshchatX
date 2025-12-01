@@ -1,9 +1,8 @@
 import asyncio
-from typing import Coroutine
+from collections.abc import Coroutine
 
 
 class AsyncUtils:
-
     # remember main loop
     main_loop: asyncio.AbstractEventLoop | None = None
 
@@ -15,7 +14,6 @@ class AsyncUtils:
     # it will run the async function on the main event loop if possible, otherwise it logs a warning
     @staticmethod
     def run_async(coroutine: Coroutine):
-
         # run provided coroutine on main event loop, ensuring thread safety
         if AsyncUtils.main_loop and AsyncUtils.main_loop.is_running():
             asyncio.run_coroutine_threadsafe(coroutine, AsyncUtils.main_loop)

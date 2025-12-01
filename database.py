@@ -1,49 +1,57 @@
 from datetime import datetime, timezone
 
 from peewee import *
-from playhouse.migrate import migrate as migrate_database, SqliteMigrator
+from playhouse.migrate import SqliteMigrator
+from playhouse.migrate import migrate as migrate_database
 
 latest_version = 6  # increment each time new database migrations are added
-database = DatabaseProxy()  # use a proxy object, as we will init real db client inside meshchat.py
+database = (
+    DatabaseProxy()
+)  # use a proxy object, as we will init real db client inside meshchat.py
 migrator = SqliteMigrator(database)
 
 
 # migrates the database
 def migrate(current_version):
-
     # migrate to version 2
     if current_version < 2:
         migrate_database(
-            migrator.add_column("lxmf_messages", 'delivery_attempts', LxmfMessage.delivery_attempts),
-            migrator.add_column("lxmf_messages", 'next_delivery_attempt_at', LxmfMessage.next_delivery_attempt_at),
+            migrator.add_column(
+                "lxmf_messages", "delivery_attempts", LxmfMessage.delivery_attempts,
+            ),
+            migrator.add_column(
+                "lxmf_messages",
+                "next_delivery_attempt_at",
+                LxmfMessage.next_delivery_attempt_at,
+            ),
         )
 
     # migrate to version 3
     if current_version < 3:
         migrate_database(
-            migrator.add_column("lxmf_messages", 'rssi', LxmfMessage.rssi),
-            migrator.add_column("lxmf_messages", 'snr', LxmfMessage.snr),
-            migrator.add_column("lxmf_messages", 'quality', LxmfMessage.quality),
+            migrator.add_column("lxmf_messages", "rssi", LxmfMessage.rssi),
+            migrator.add_column("lxmf_messages", "snr", LxmfMessage.snr),
+            migrator.add_column("lxmf_messages", "quality", LxmfMessage.quality),
         )
 
     # migrate to version 4
     if current_version < 4:
         migrate_database(
-            migrator.add_column("lxmf_messages", 'method', LxmfMessage.method),
+            migrator.add_column("lxmf_messages", "method", LxmfMessage.method),
         )
 
     # migrate to version 5
     if current_version < 5:
         migrate_database(
-            migrator.add_column("announces", 'rssi', Announce.rssi),
-            migrator.add_column("announces", 'snr', Announce.snr),
-            migrator.add_column("announces", 'quality', Announce.quality),
+            migrator.add_column("announces", "rssi", Announce.rssi),
+            migrator.add_column("announces", "snr", Announce.snr),
+            migrator.add_column("announces", "quality", Announce.quality),
         )
 
     # migrate to version 6
     if current_version < 6:
         migrate_database(
-            migrator.add_column("lxmf_messages", 'is_spam', LxmfMessage.is_spam),
+            migrator.add_column("lxmf_messages", "is_spam", LxmfMessage.is_spam),
         )
 
     return latest_version
@@ -55,7 +63,6 @@ class BaseModel(Model):
 
 
 class Config(BaseModel):
-
     id = BigAutoField()
     key = CharField(unique=True)
     value = TextField()
@@ -68,12 +75,19 @@ class Config(BaseModel):
 
 
 class Announce(BaseModel):
-
     id = BigAutoField()
-    destination_hash = CharField(unique=True)  # unique destination hash that was announced
-    aspect = TextField(index=True)  # aspect is not included in announce, but we want to filter saved announces by aspect
-    identity_hash = CharField(index=True)  # identity hash that announced the destination
-    identity_public_key = CharField()  # base64 encoded public key, incase we want to recreate the identity manually
+    destination_hash = CharField(
+        unique=True,
+    )  # unique destination hash that was announced
+    aspect = TextField(
+        index=True,
+    )  # aspect is not included in announce, but we want to filter saved announces by aspect
+    identity_hash = CharField(
+        index=True,
+    )  # identity hash that announced the destination
+    identity_public_key = (
+        CharField()
+    )  # base64 encoded public key, incase we want to recreate the identity manually
     app_data = TextField(null=True)  # base64 encoded app data bytes
     rssi = IntegerField(null=True)
     snr = FloatField(null=True)
@@ -88,7 +102,6 @@ class Announce(BaseModel):
 
 
 class CustomDestinationDisplayName(BaseModel):
-
     id = BigAutoField()
     destination_hash = CharField(unique=True)  # unique destination hash
     display_name = CharField()  # custom display name for the destination hash
@@ -102,7 +115,6 @@ class CustomDestinationDisplayName(BaseModel):
 
 
 class FavouriteDestination(BaseModel):
-
     id = BigAutoField()
     destination_hash = CharField(unique=True)  # unique destination hash
     display_name = CharField()  # custom display name for the destination hash
@@ -117,21 +129,30 @@ class FavouriteDestination(BaseModel):
 
 
 class LxmfMessage(BaseModel):
-
     id = BigAutoField()
     hash = CharField(unique=True)  # unique lxmf message hash
     source_hash = CharField(index=True)
     destination_hash = CharField(index=True)
-    state = CharField()  # state is converted from internal int to a human friendly string
+    state = (
+        CharField()
+    )  # state is converted from internal int to a human friendly string
     progress = FloatField()  # progress is converted from internal float 0.00-1.00 to float between 0.00/100 (2 decimal places)
     is_incoming = BooleanField()  # if true, we should ignore state, it's set to draft by default on incoming messages
-    method = CharField(null=True)  # what method is being used to send the message, e.g: direct, propagated
-    delivery_attempts = IntegerField(default=0)  # how many times delivery has been attempted for this message
-    next_delivery_attempt_at = FloatField(null=True)  # timestamp of when the message will attempt delivery again
+    method = CharField(
+        null=True,
+    )  # what method is being used to send the message, e.g: direct, propagated
+    delivery_attempts = IntegerField(
+        default=0,
+    )  # how many times delivery has been attempted for this message
+    next_delivery_attempt_at = FloatField(
+        null=True,
+    )  # timestamp of when the message will attempt delivery again
     title = TextField()
     content = TextField()
     fields = TextField()  # json string
-    timestamp = FloatField()  # timestamp of when the message was originally created (before ever being sent)
+    timestamp = (
+        FloatField()
+    )  # timestamp of when the message was originally created (before ever being sent)
     rssi = IntegerField(null=True)
     snr = FloatField(null=True)
     quality = FloatField(null=True)
@@ -145,7 +166,6 @@ class LxmfMessage(BaseModel):
 
 
 class LxmfConversationReadState(BaseModel):
-
     id = BigAutoField()
     destination_hash = CharField(unique=True)  # unique destination hash
     last_read_at = DateTimeField()
@@ -159,12 +179,13 @@ class LxmfConversationReadState(BaseModel):
 
 
 class LxmfUserIcon(BaseModel):
-
     id = BigAutoField()
     destination_hash = CharField(unique=True)  # unique destination hash
     icon_name = CharField()  # material design icon name for the destination hash
     foreground_colour = CharField()  # hex colour to use for foreground (icon colour)
-    background_colour = CharField()  # hex colour to use for background (background colour)
+    background_colour = (
+        CharField()
+    )  # hex colour to use for background (background colour)
 
     created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
     updated_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
@@ -175,9 +196,10 @@ class LxmfUserIcon(BaseModel):
 
 
 class BlockedDestination(BaseModel):
-
     id = BigAutoField()
-    destination_hash = CharField(unique=True, index=True)  # unique destination hash that is blocked
+    destination_hash = CharField(
+        unique=True, index=True,
+    )  # unique destination hash that is blocked
     created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
     updated_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
 
@@ -187,9 +209,10 @@ class BlockedDestination(BaseModel):
 
 
 class SpamKeyword(BaseModel):
-
     id = BigAutoField()
-    keyword = CharField(unique=True, index=True)  # keyword to match against message content
+    keyword = CharField(
+        unique=True, index=True,
+    )  # keyword to match against message content
     created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
     updated_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
 

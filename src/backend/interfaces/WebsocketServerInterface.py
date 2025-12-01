@@ -3,33 +3,31 @@ import time
 
 import RNS
 from RNS.Interfaces.Interface import Interface
-from websockets.sync.server import Server
-from websockets.sync.server import serve
-from websockets.sync.server import ServerConnection
+from websockets.sync.server import Server, ServerConnection, serve
 
 from src.backend.interfaces.WebsocketClientInterface import WebsocketClientInterface
 
 
 class WebsocketServerInterface(Interface):
-
     # TODO: required?
     DEFAULT_IFAC_SIZE = 16
 
     RESTART_DELAY_SECONDS = 5
 
     def __str__(self):
-        return f"WebsocketServerInterface[{self.name}/{self.listen_ip}:{self.listen_port}]"
+        return (
+            f"WebsocketServerInterface[{self.name}/{self.listen_ip}:{self.listen_port}]"
+        )
 
     def __init__(self, owner, configuration):
-
         super().__init__()
 
         self.owner = owner
 
         self.IN = True
         self.OUT = False
-        self.HW_MTU = 262144 # 256KiB
-        self.bitrate = 1_000_000_000 # 1Gbps
+        self.HW_MTU = 262144  # 256KiB
+        self.bitrate = 1_000_000_000  # 1Gbps
         self.mode = RNS.Interfaces.Interface.Interface.MODE_FULL
 
         self.server: Server | None = None
@@ -61,12 +59,12 @@ class WebsocketServerInterface(Interface):
     def clients(self):
         return len(self.spawned_interfaces)
 
-    # todo docs
+    # TODO docs
     def received_announce(self, from_spawned=False):
         if from_spawned:
             self.ia_freq_deque.append(time.time())
 
-    # todo docs
+    # TODO docs
     def sent_announce(self, from_spawned=False):
         if from_spawned:
             self.oa_freq_deque.append(time.time())
@@ -80,17 +78,19 @@ class WebsocketServerInterface(Interface):
         pass
 
     def serve(self):
-
         # handle new websocket client connections
         def on_websocket_client_connected(websocket: ServerConnection):
-
             # create new child interface
             RNS.log("Accepting incoming WebSocket connection", RNS.LOG_VERBOSE)
-            spawned_interface = WebsocketClientInterface(self.owner, {
-                "name": f"Client on {self.name}",
-                "target_host": websocket.remote_address[0],
-                "target_port": str(websocket.remote_address[1]),
-            }, websocket=websocket)
+            spawned_interface = WebsocketClientInterface(
+                self.owner,
+                {
+                    "name": f"Client on {self.name}",
+                    "target_host": websocket.remote_address[0],
+                    "target_port": str(websocket.remote_address[1]),
+                },
+                websocket=websocket,
+            )
 
             # configure child interface
             spawned_interface.IN = self.IN
@@ -101,16 +101,19 @@ class WebsocketServerInterface(Interface):
             spawned_interface.parent_interface = self
             spawned_interface.online = True
 
-            # todo implement?
+            # TODO implement?
             spawned_interface.announce_rate_target = None
             spawned_interface.announce_rate_grace = None
             spawned_interface.announce_rate_penalty = None
 
-            # todo ifac?
-            # todo announce rates?
+            # TODO ifac?
+            # TODO announce rates?
 
             # activate child interface
-            RNS.log(f"Spawned new WebsocketClientInterface: {spawned_interface}", RNS.LOG_VERBOSE)
+            RNS.log(
+                f"Spawned new WebsocketClientInterface: {spawned_interface}",
+                RNS.LOG_VERBOSE,
+            )
             RNS.Transport.interfaces.append(spawned_interface)
 
             # associate child interface with this interface
@@ -126,8 +129,13 @@ class WebsocketServerInterface(Interface):
 
         # run websocket server
         try:
-            RNS.log(f"Starting Websocket server for {str(self)}...", RNS.LOG_DEBUG)
-            with serve(on_websocket_client_connected, self.listen_ip, self.listen_port, compression=None) as server:
+            RNS.log(f"Starting Websocket server for {self!s}...", RNS.LOG_DEBUG)
+            with serve(
+                on_websocket_client_connected,
+                self.listen_ip,
+                self.listen_port,
+                compression=None,
+            ) as server:
                 self.online = True
                 self.server = server
                 server.serve_forever()
@@ -136,12 +144,11 @@ class WebsocketServerInterface(Interface):
 
         # websocket server is no longer running, let's restart it
         self.online = False
-        RNS.log(f"Websocket server stopped for {str(self)}...", RNS.LOG_DEBUG)
+        RNS.log(f"Websocket server stopped for {self!s}...", RNS.LOG_DEBUG)
         time.sleep(self.RESTART_DELAY_SECONDS)
         self.serve()
 
     def detach(self):
-
         # mark as offline
         self.online = False
 
@@ -151,6 +158,7 @@ class WebsocketServerInterface(Interface):
 
         # mark as detached
         self.detached = True
+
 
 # set interface class RNS should use when importing this external interface
 interface_class = WebsocketServerInterface
