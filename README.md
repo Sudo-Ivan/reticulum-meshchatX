@@ -55,8 +55,18 @@ The wheel includes the frontend `public/` assets, `logo/`, and the CLI entry poi
 ### Building in Docker
 
 ```bash
-make docker-build
+make build-docker
 ```
+
+`build-docker` creates `reticulum-meshchatx:local` (or `$(DOCKER_IMAGE)` if you override it) via `docker buildx`. Set `DOCKER_PLATFORMS` to `linux/amd64,linux/arm64` when you need multi-arch images, and adjust `DOCKER_BUILD_FLAGS`/`DOCKER_BUILD_ARGS` to control `--load`/`--push`.
+
+### Running with Docker Compose
+
+```bash
+make run-docker
+```
+
+`run-docker` feeds the locally-built image into `docker compose -f docker-compose.yml up --remove-orphans --pull never reticulum-meshchatx`. The compose file uses the `MESHCHAT_IMAGE` env var so you can override the target image without editing the YAML (the default still points at `ghcr.io/sudo-ivan/reticulum-meshchatx:latest`). Use `docker compose down` or `Ctrl+C` to stop the container.
 
 The Electron build artifacts will still live under `dist/` for releases.
 
