@@ -1,12 +1,29 @@
 #!/bin/bash
 set -e
 
-WHEEL_PATH="python-dist/reticulum_meshchatx-2.41.0-py3-none-any.whl"
+# Find wheel file dynamically
+WHEEL_PATTERN="python-dist/reticulum_meshchatx-*-py3-none-any.whl"
+WHEEL_FILES=($WHEEL_PATTERN)
+
+if [ ${#WHEEL_FILES[@]} -eq 0 ]; then
+    echo "Error: No wheel files found matching pattern: $WHEEL_PATTERN"
+    echo "Make sure to run 'poetry build' or similar to create the wheel first."
+    exit 1
+elif [ ${#WHEEL_FILES[@]} -gt 1 ]; then
+    echo "Error: Multiple wheel files found:"
+    printf '  %s\n' "${WHEEL_FILES[@]}"
+    echo "Please clean up old wheels or specify which one to use."
+    exit 1
+fi
+
+WHEEL_PATH="${WHEEL_FILES[0]}"
 
 if [ ! -f "$WHEEL_PATH" ]; then
     echo "Error: Wheel not found at $WHEEL_PATH"
     exit 1
 fi
+
+echo "Found wheel: $WHEEL_PATH"
 
 echo "Creating test virtual environment..."
 TEST_VENV=$(mktemp -d)/test-venv
