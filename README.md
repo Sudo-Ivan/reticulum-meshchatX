@@ -16,7 +16,8 @@ A heavily customized fork of [Reticulum MeshChat](https://github.com/liamcottle/
 - [x] Docker images are smaller and use SHA256 hashes for the images.
 - [x] Electron improvements.
 - [x] Latest updates for NPM and Python dependencies (bleeding edge)
-- [x] Ruff linting, CodeQL Advanced and Bearer SAST fixes.
+- [x] Numerous Ruff, Deepsource, CodeQL Advanced and Bearer Linting/SAST fixes.
+- [x] Some performance improvements.
 
 ## Usage
 
