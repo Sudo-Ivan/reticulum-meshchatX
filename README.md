@@ -11,6 +11,15 @@ A heavily customized fork of [Reticulum MeshChat](https://github.com/liamcottle/
 - [x] Block recieving messages from users.
 - [ ] Spam filter (based on keywords)
 - [ ] Multi-identity support.
+- [ ] Multi-language support
+- [ ] Offline Reticulum documentation tool
+- [ ] More tools (translate, LoRa calculator, LXMFy bots, etc)
+- [ ] Codebase reorginization and cleanup.
+- [ ] Tests and proper CI/CD pipeline.
+- [ ] RNS hot reload 
+- [ ] Backup/Import identities, messages and interfaces.
+- [ ] Full LXST support.
+- [ ] Move to Poetry and pyproject.toml for Python packaging.
 - [x] More stats on about page.
 - [x] Actions are pinned to full-length SHA hashes.
 - [x] Docker images are smaller and use SHA256 hashes for the images.
@@ -43,4 +52,8 @@ The build will be in the `dist` directory.
 ```bash
 make develop
 ```
+
+## Python packaging
+
+The backend now provides `pyproject.toml` so you can build/install a wheel with `pip install .` or `python -m build`. Before packaging, run `python3 scripts/sync_version.py` (or `make sync-version`) so the generated `src/version.py` reflects the `package.json` version that the Electron artifacts use. The same version helper drives `meshchat.get_app_version()` and `setup.py`, so the CLI release metadata, wheel and AppImage/NSIS bundles stay aligned.
 
