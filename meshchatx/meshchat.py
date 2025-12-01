@@ -49,20 +49,19 @@ def get_file_path(filename):
         datadir = os.path.dirname(sys.executable)
         return os.path.join(datadir, filename)
 
-    # Running from source or an installed wheel: assets live inside the meshchatx package
+    # Assets live inside the meshchatx package when installed from a wheel
     package_dir = os.path.dirname(__file__)
-    test_path = os.path.join(package_dir, filename)
-    if os.path.exists(test_path):
-        return test_path
+    package_path = os.path.join(package_dir, filename)
+    if os.path.exists(package_path):
+        return package_path
 
-    # Fall back to repo root when running directly from the source tree
+    # When running from the repository, fall back to the project root
     repo_root = os.path.dirname(package_dir)
     repo_path = os.path.join(repo_root, filename)
     if os.path.exists(repo_path):
         return repo_path
 
-    # Return the package path even if it does not exist so callers raise a clear error
-    return test_path
+    return package_path
 
 
 class ReticulumMeshChat:

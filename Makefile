@@ -39,6 +39,7 @@ clean:
 	rm -rf build
 	rm -rf dist
 	rm -rf python-dist
+	rm -rf meshchatx/public
 
 sync-version:
 	$(PYTHON) scripts/sync_version.py

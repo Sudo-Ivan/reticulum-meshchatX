@@ -28,8 +28,7 @@ print(f'meshchat module location: {meshchat.__file__}')
 
 # Check if public directory exists
 meshchat_dir = os.path.dirname(meshchat.__file__)
-package_dir = os.path.dirname(os.path.dirname(meshchat_dir))
-public_path = os.path.join(package_dir, 'public')
+public_path = os.path.join(meshchat_dir, 'public')
 print(f'Checking for public at: {public_path}')
 print(f'Exists: {os.path.exists(public_path)}')
 
@@ -45,7 +44,7 @@ if os.path.exists(test_path):
 else:
     print('WARNING: public directory not found!')
     print('Checking parent directories...')
-    current = package_dir
+    current = meshchat_dir
     for i in range(3):
         test = os.path.join(current, 'public')
         print(f'  {test}: {os.path.exists(test)}')
