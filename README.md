@@ -8,7 +8,7 @@ A heavily customized fork of [Reticulum MeshChat](https://github.com/liamcottle/
 - [x] Ability to set inbound and propagation node stamps.
 - [x] Better config parsing.
 - [x] Cancel page fetching or file downloads
-- [x] Block recieving messages from users.
+- [x] Block receiving messages from users.
 - [ ] Spam filter (based on keywords)
 - [ ] Multi-identity support.
 - [ ] Multi-language support
@@ -19,11 +19,11 @@ A heavily customized fork of [Reticulum MeshChat](https://github.com/liamcottle/
 - [ ] RNS hot reload 
 - [ ] Backup/Import identities, messages and interfaces.
 - [ ] Full LXST support.
-- [x] Move to Poetry and pyproject.toml for Python packaging.
+- [x] Poetry for packaging and dependency management.
 - [x] More stats on about page.
 - [x] Actions are pinned to full-length SHA hashes.
 - [x] Docker images are smaller and use SHA256 hashes for the images.
-- [x] Electron improvements.
+- [x] Electron improvements (ASAR and security).
 - [x] Latest updates for NPM and Python dependencies (bleeding edge)
 - [x] Numerous Ruff, Deepsource, CodeQL Advanced and Bearer Linting/SAST fixes.
 - [x] Some performance improvements.
