@@ -221,7 +221,8 @@ class ReticulumMeshChat:
         thread.start()
 
     # gets app version from package.json
-    def get_app_version(self) -> str:
+    @staticmethod
+    def get_app_version() -> str:
         with open(get_file_path("package.json")) as f:
             package_json = json.load(f)
             return package_json["version"]
@@ -447,7 +448,8 @@ class ReticulumMeshChat:
         )
         return query.exists()
 
-    def message_fields_have_attachments(self, fields_json: str | None):
+    @staticmethod
+    def message_fields_have_attachments(fields_json: str | None):
         if not fields_json:
             return False
         try:
@@ -491,7 +493,8 @@ class ReticulumMeshChat:
 
         return matches
 
-    def parse_bool_query_param(self, value: str | None) -> bool:
+    @staticmethod
+    def parse_bool_query_param(value: str | None) -> bool:
         if value is None:
             return False
         value = value.lower()
@@ -3167,7 +3170,8 @@ class ReticulumMeshChat:
     # to the following map:
     # - var_field1: 123
     # - var_field2: 456
-    def convert_nomadnet_string_data_to_map(self, path_data: str | None):
+    @staticmethod
+    def convert_nomadnet_string_data_to_map(path_data: str | None):
         data = {}
         if path_data is not None:
             for field in path_data.split("|"):
@@ -3178,7 +3182,8 @@ class ReticulumMeshChat:
                     print(f"unhandled field: {field}")
         return data
 
-    def convert_nomadnet_field_data_to_map(self, field_data):
+    @staticmethod
+    def convert_nomadnet_field_data_to_map(field_data):
         data = {}
         if field_data is not None or "{}":
             try:
@@ -3681,7 +3686,8 @@ class ReticulumMeshChat:
         }
 
     # convert lxmf state to a human friendly string
-    def convert_lxmf_state_to_string(self, lxmf_message: LXMF.LXMessage):
+    @staticmethod
+    def convert_lxmf_state_to_string(lxmf_message: LXMF.LXMessage):
         # convert state to string
         lxmf_message_state = "unknown"
         if lxmf_message.state == LXMF.LXMessage.GENERATING:
@@ -3704,7 +3710,8 @@ class ReticulumMeshChat:
         return lxmf_message_state
 
     # convert lxmf method to a human friendly string
-    def convert_lxmf_method_to_string(self, lxmf_message: LXMF.LXMessage):
+    @staticmethod
+    def convert_lxmf_method_to_string(lxmf_message: LXMF.LXMessage):
         # convert method to string
         lxmf_message_method = "unknown"
         if lxmf_message.method == LXMF.LXMessage.OPPORTUNISTIC:
@@ -3718,7 +3725,8 @@ class ReticulumMeshChat:
 
         return lxmf_message_method
 
-    def convert_propagation_node_state_to_string(self, state):
+    @staticmethod
+    def convert_propagation_node_state_to_string(state):
         # map states to strings
         state_map = {
             LXMRouter.PR_IDLE: "idle",
@@ -3787,7 +3795,8 @@ class ReticulumMeshChat:
         }
 
     # convert database favourite to a dictionary
-    def convert_db_favourite_to_dict(self, favourite: database.FavouriteDestination):
+    @staticmethod
+    def convert_db_favourite_to_dict(favourite: database.FavouriteDestination):
         return {
             "id": favourite.id,
             "destination_hash": favourite.destination_hash,
@@ -3798,7 +3807,8 @@ class ReticulumMeshChat:
         }
 
     # convert database lxmf message to a dictionary
-    def convert_db_lxmf_message_to_dict(self, db_lxmf_message: database.LxmfMessage):
+    @staticmethod
+    def convert_db_lxmf_message_to_dict(db_lxmf_message: database.LxmfMessage):
         return {
             "id": db_lxmf_message.id,
             "hash": db_lxmf_message.hash,
@@ -3823,8 +3833,8 @@ class ReticulumMeshChat:
         }
 
     # updates the lxmf user icon for the provided destination hash
+    @staticmethod
     def update_lxmf_user_icon(
-        self,
         destination_hash: str,
         icon_name: str,
         foreground_colour: str,
@@ -3852,7 +3862,8 @@ class ReticulumMeshChat:
         query.execute()
 
     # check if a destination is blocked
-    def is_destination_blocked(self, destination_hash: str) -> bool:
+    @staticmethod
+    def is_destination_blocked(destination_hash: str) -> bool:
         try:
             blocked = database.BlockedDestination.get_or_none(
                 database.BlockedDestination.destination_hash == destination_hash,
@@ -3862,7 +3873,8 @@ class ReticulumMeshChat:
             return False
 
     # check if message content matches spam keywords
-    def check_spam_keywords(self, title: str, content: str) -> bool:
+    @staticmethod
+    def check_spam_keywords(title: str, content: str) -> bool:
         try:
             spam_keywords = database.SpamKeyword.select()
             search_text = (title + " " + content).lower()
@@ -3874,7 +3886,8 @@ class ReticulumMeshChat:
             return False
 
     # check if message has attachments and should be rejected
-    def has_attachments(self, lxmf_fields: dict) -> bool:
+    @staticmethod
+    def has_attachments(lxmf_fields: dict) -> bool:
         try:
             if LXMF.FIELD_FILE_ATTACHMENTS in lxmf_fields:
                 return len(lxmf_fields[LXMF.FIELD_FILE_ATTACHMENTS]) > 0
@@ -4108,8 +4121,9 @@ class ReticulumMeshChat:
         query.execute()
 
     # upserts a custom destination display name to the database
+    @staticmethod
     def db_upsert_custom_destination_display_name(
-        self, destination_hash: str, display_name: str,
+        destination_hash: str, display_name: str,
     ):
         # prepare data to insert or update
         data = {
@@ -4127,8 +4141,9 @@ class ReticulumMeshChat:
         query.execute()
 
     # upserts a custom destination display name to the database
+    @staticmethod
     def db_upsert_favourite(
-        self, destination_hash: str, display_name: str, aspect: str,
+        destination_hash: str, display_name: str, aspect: str,
     ):
         # prepare data to insert or update
         data = {
@@ -4147,7 +4162,8 @@ class ReticulumMeshChat:
         query.execute()
 
     # upserts lxmf conversation read state to the database
-    def db_mark_lxmf_conversation_as_read(self, destination_hash: str):
+    @staticmethod
+    def db_mark_lxmf_conversation_as_read(destination_hash: str):
         # prepare data to insert or update
         data = {
             "destination_hash": destination_hash,
@@ -4633,7 +4649,8 @@ class ReticulumMeshChat:
         )
 
     # gets the custom display name a user has set for the provided destination hash
-    def get_custom_destination_display_name(self, destination_hash: str):
+    @staticmethod
+    def get_custom_destination_display_name(destination_hash: str):
         # get display name from database
         db_destination_display_name = database.CustomDestinationDisplayName.get_or_none(
             database.CustomDestinationDisplayName.destination_hash == destination_hash,
@@ -4646,7 +4663,8 @@ class ReticulumMeshChat:
     # get name to show for an lxmf conversation
     # currently, this will use the app data from the most recent announce
     # TODO: we should fetch this from our contacts database, when it gets implemented, and if not found, fallback to app data
-    def get_lxmf_conversation_name(self, destination_hash):
+    @staticmethod
+    def get_lxmf_conversation_name(destination_hash):
         # get lxmf.delivery announce from database for the provided destination hash
         lxmf_announce = (
             database.Announce.select()
