@@ -78,11 +78,12 @@ class AudioCall:
 
 class AudioCallManager:
 
-    def __init__(self, identity: RNS.Identity):
+    def __init__(self, identity: RNS.Identity, is_destination_blocked_callback=None):
 
         self.identity = identity
         self.on_incoming_call_callback = None
         self.on_outgoing_call_callback = None
+        self.is_destination_blocked_callback = is_destination_blocked_callback
         self.audio_call_receiver = AudioCallReceiver(manager=self)
 
         # remember audio calls
@@ -224,6 +225,21 @@ class AudioCallReceiver:
 
     # client connected to us, set up an audio call instance
     def client_connected(self, link: RNS.Link):
+
+        # check if source is blocked
+        if self.manager.is_destination_blocked_callback is not None:
+            try:
+                # try to get remote identity hash
+                remote_identity = link.get_remote_identity()
+                if remote_identity is not None:
+                    source_hash = remote_identity.hash.hex()
+                    if self.manager.is_destination_blocked_callback(source_hash):
+                        print(f"Rejecting audio call from blocked source: {source_hash}")
+                        link.teardown()
+                        return
+            except:
+                # if we can't get identity yet, we'll check later
+                pass
 
         # todo: this can be optional, it's only being sent by default for ui, can be removed
         link.identify(self.manager.identity)
