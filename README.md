@@ -74,16 +74,20 @@ The Electron build artifacts will still live under `dist/` for releases.
 
 The backend uses Poetry with `pyproject.toml` for dependency management and packaging. Before building, run `python3 scripts/sync_version.py` (or `make sync-version`) to ensure the generated `src/version.py` reflects the version from `package.json` that the Electron artifacts use. This keeps the CLI release metadata, wheel packages, and other bundles aligned.
 
+### Build artifact locations
+
+Both `poetry build` and `python -m build` generate wheels inside the default `dist/` directory. The `make wheel` shortcut wraps `poetry build -f wheel` and then runs `python scripts/move_wheels.py` to relocate the generated `.whl` files into `python-dist/` (the layout expected by `scripts/test_wheel.sh` and the release automation). Use `make wheel` if you need the artifacts in `python-dist/`; `poetry build` or `python -m build` alone will leave them in `dist/`.
+
 ### Building with Poetry
 
 ```bash
 # Install dependencies
 poetry install
 
-# Build the package
+# Build the package (wheels land in dist/)
 poetry build
 
-# Install locally for testing
+# Install locally for testing (consumes dist/)
 pip install dist/*.whl
 ```
 
