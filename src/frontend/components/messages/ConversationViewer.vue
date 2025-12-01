@@ -1,35 +1,35 @@
 <template>
 
     <!-- peer selected -->
-    <div v-if="selectedPeer" class="flex flex-col h-full bg-white/90 dark:bg-zinc-950/80 backdrop-blur overflow-hidden sm:m-3 sm:border sm:rounded-2xl sm:shadow-xl border-gray-200 dark:border-zinc-800 transition-colors">
+    <div v-if="selectedPeer" class="flex flex-col h-full bg-white dark:bg-zinc-950 overflow-hidden sm:m-3 sm:border sm:rounded-2xl sm:shadow-lg border-gray-200/50 dark:border-zinc-800/50 transition-all">
 
         <!-- header -->
-        <div class="flex p-2 border-b border-gray-300 dark:border-zinc-800">
+        <div class="flex items-center px-4 py-3 border-b border-gray-200/60 dark:border-zinc-800/60 bg-white/80 dark:bg-zinc-900/50 backdrop-blur-sm">
 
             <!-- peer icon -->
-            <div class="my-auto mr-2">
-                <div v-if="selectedPeer.lxmf_user_icon" class="p-2 rounded" :style="{ 'color': selectedPeer.lxmf_user_icon.foreground_colour, 'background-color': selectedPeer.lxmf_user_icon.background_colour }">
-                    <MaterialDesignIcon :icon-name="selectedPeer.lxmf_user_icon.icon_name" class="w-6 h-6"/>
+            <div class="flex-shrink-0 mr-3">
+                <div v-if="selectedPeer.lxmf_user_icon" class="p-2.5 rounded-xl shadow-sm" :style="{ 'color': selectedPeer.lxmf_user_icon.foreground_colour, 'background-color': selectedPeer.lxmf_user_icon.background_colour }">
+                    <MaterialDesignIcon :icon-name="selectedPeer.lxmf_user_icon.icon_name" class="w-5 h-5"/>
                 </div>
-                <div v-else class="bg-gray-200 dark:bg-zinc-700 text-gray-500 dark:text-gray-400 p-2 rounded">
-                    <MaterialDesignIcon icon-name="account-outline" class="w-6 h-6"/>
+                <div v-else class="bg-gradient-to-br from-gray-100 to-gray-200 dark:from-zinc-800 dark:to-zinc-700 text-gray-600 dark:text-gray-300 p-2.5 rounded-xl shadow-sm">
+                    <MaterialDesignIcon icon-name="account-outline" class="w-5 h-5"/>
                 </div>
             </div>
 
             <!-- peer info -->
             <div class="min-w-0 flex-1">
-                <div @click="updateCustomDisplayName" class="flex cursor-pointer min-w-0">
-                    <div v-if="selectedPeer.custom_display_name != null" class="my-auto mr-1 dark:text-white" title="Custom Display Name">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4">
+                <div @click="updateCustomDisplayName" class="flex items-center cursor-pointer min-w-0 group">
+                    <div v-if="selectedPeer.custom_display_name != null" class="mr-1.5 text-gray-500 dark:text-zinc-400 group-hover:text-gray-700 dark:group-hover:text-zinc-200 transition-colors" title="Custom Display Name">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z" />
                             <path stroke-linecap="round" stroke-linejoin="round" d="M6 6h.008v.008H6V6Z" />
                         </svg>
                     </div>
-                    <div class="my-auto font-semibold dark:text-white truncate max-w-xs sm:max-w-sm" :title="selectedPeer.custom_display_name ?? selectedPeer.display_name">
+                    <div class="font-semibold text-gray-900 dark:text-zinc-100 truncate max-w-xs sm:max-w-sm text-base" :title="selectedPeer.custom_display_name ?? selectedPeer.display_name">
                         {{ selectedPeer.custom_display_name ?? selectedPeer.display_name }}
                     </div>
                 </div>
-                <div class="text-sm dark:text-zinc-300">
+                <div class="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
 
                     <!-- destination hash -->
                     <div class="inline-block mr-1">
@@ -64,25 +64,21 @@
             </div>
 
             <!-- dropdown menu -->
-            <div class="ml-auto my-auto mx-2">
+            <div class="ml-auto flex items-center gap-1">
                 <ConversationDropDownMenu
                     v-if="selectedPeer"
                     :peer="selectedPeer"
                     @conversation-deleted="onConversationDeleted"
                     @set-custom-display-name="updateCustomDisplayName"/>
-            </div>
-
-            <!-- popout button -->
-            <div class="my-auto mr-2">
-                <IconButton @click="openConversationPopout" title="Pop out chat">
-                    <MaterialDesignIcon icon-name="open-in-new" class="w-5 h-5"/>
+                
+                <!-- popout button -->
+                <IconButton @click="openConversationPopout" title="Pop out chat" class="text-gray-500 dark:text-zinc-400 hover:text-gray-700 dark:hover:text-zinc-200">
+                    <MaterialDesignIcon icon-name="open-in-new" class="w-4 h-4"/>
                 </IconButton>
-            </div>
 
-            <!-- close button -->
-            <div class="my-auto mr-2">
-                <IconButton @click="close">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5">
+                <!-- close button -->
+                <IconButton @click="close" class="text-gray-500 dark:text-zinc-400 hover:text-gray-700 dark:hover:text-zinc-200">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4">
                         <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
                     </svg>
                 </IconButton>
@@ -91,27 +87,33 @@
         </div>
 
         <!-- chat items -->
-        <div @scroll="onMessagesScroll" id="messages" class="h-full overflow-y-scroll">
+        <div @scroll="onMessagesScroll" id="messages" class="h-full overflow-y-scroll bg-gray-50/30 dark:bg-zinc-950/50">
 
-            <div v-if="selectedPeerChatItems.length > 0" class="flex flex-col flex-col-reverse p-3">
+            <div v-if="selectedPeerChatItems.length > 0" class="flex flex-col flex-col-reverse px-4 py-6">
 
-                <div v-for="chatItem of selectedPeerChatItemsReversed" :key="chatItem.lxmf_message.hash" class="flex flex-col max-w-xl mt-3" :class="{ 'ml-auto pl-4 md:pl-16 items-end': chatItem.is_outbound, 'mr-auto pr-4 md:pr-16 items-start': !chatItem.is_outbound }">
+                <div v-for="chatItem of selectedPeerChatItemsReversed" :key="chatItem.lxmf_message.hash" class="flex flex-col max-w-[75%] sm:max-w-[65%] lg:max-w-[55%] mb-4 group" :class="{ 'ml-auto items-end': chatItem.is_outbound, 'mr-auto items-start': !chatItem.is_outbound }">
 
                     <!-- message content -->
-                    <div @click="onChatItemClick(chatItem)" class="border border-gray-300 dark:border-zinc-800 rounded-xl shadow overflow-hidden" :class="[ ['cancelled', 'failed'].includes(chatItem.lxmf_message.state) ? 'bg-red-500 text-white' : chatItem.is_outbound ? 'bg-[#3b82f6] text-white' : 'bg-[#efefef]' ]">
+                    <div @click="onChatItemClick(chatItem)" class="relative rounded-2xl overflow-hidden transition-all duration-200 hover:shadow-md" :class="[ 
+                        ['cancelled', 'failed'].includes(chatItem.lxmf_message.state) 
+                            ? 'bg-red-500 text-white shadow-sm' 
+                            : chatItem.is_outbound 
+                                ? 'bg-blue-600 text-white shadow-sm' 
+                                : 'bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100 border border-gray-200/60 dark:border-zinc-800/60 shadow-sm' 
+                    ]">
 
-                        <div class="w-full space-y-0.5 px-2.5 py-1">
+                        <div class="w-full space-y-1 px-4 py-2.5">
 
                             <!-- content -->
-                            <div v-if="chatItem.lxmf_message.content" style="white-space:pre-wrap;word-break:break-word;font-family:inherit;">{{ chatItem.lxmf_message.content }}</div>
+                            <div v-if="chatItem.lxmf_message.content" class="text-sm leading-relaxed whitespace-pre-wrap break-words" style="font-family:inherit;">{{ chatItem.lxmf_message.content }}</div>
 
                             <!-- image field -->
-                            <div v-if="chatItem.lxmf_message.fields?.image" class="relative group">
+                            <div v-if="chatItem.lxmf_message.fields?.image" class="relative group mt-1 -mx-1">
                                 <img
                                     @click.stop="openImage(`data:image/${chatItem.lxmf_message.fields.image.image_type};base64,${chatItem.lxmf_message.fields.image.image_bytes}`)"
                                     :src="`data:image/${chatItem.lxmf_message.fields.image.image_type};base64,${chatItem.lxmf_message.fields.image.image_bytes}`"
-                                    class="w-full rounded-md cursor-pointer"/>
-                                <div class="absolute bottom-1 left-1 bg-black/70 text-white text-xs px-2 py-0.5 rounded-full flex space-x-1">
+                                    class="w-full rounded-lg cursor-pointer transition-transform group-hover:scale-[1.01]"/>
+                                <div class="absolute bottom-2 left-2 bg-black/60 backdrop-blur-sm text-white text-xs px-2.5 py-1 rounded-lg flex items-center gap-1.5">
                                     <span>{{ (chatItem.lxmf_message.fields.image.image_type ?? 'image').toUpperCase() }}</span>
                                     <span>•</span>
                                     <span>{{ formatBase64Bytes(chatItem.lxmf_message.fields.image.image_bytes) }}</span>
@@ -122,14 +124,12 @@
                             <div v-if="chatItem.lxmf_message.fields?.audio" class="pb-1">
 
                                 <!-- audio is loaded -->
-                                <audio v-if="lxmfMessageAudioAttachmentCache[chatItem.lxmf_message.hash]" controls class="shadow rounded-full" style="height:54px;">
-                                    <source :src="lxmfMessageAudioAttachmentCache[chatItem.lxmf_message.hash]" type="audio/wav"/>
-                                </audio>
+                                <audio v-if="lxmfMessageAudioAttachmentCache[chatItem.lxmf_message.hash]" controls class="w-full rounded-lg shadow-sm" style="height:54px;" :class="chatItem.is_outbound ? 'audio-controls-light' : 'audio-controls-dark'"></audio>
 
                                 <!-- audio is not yet loaded -->
                                 <!-- min height to make sure audio player doesn't cause height increase after loading -->
                                 <div v-else style="min-height:54px;" class="flex">
-                                    <button @click="downloadFileFromBase64('audio.bin', chatItem.lxmf_message.fields.audio.audio_bytes)" type="button" class="my-auto flex border border-gray-300 dark:border-zinc-800 hover:bg-gray-100 rounded px-2 py-1 text-sm text-gray-700 font-semibold cursor-pointer space-x-2 bg-[#efefef]">
+                                    <button @click="downloadFileFromBase64('audio.bin', chatItem.lxmf_message.fields.audio.audio_bytes)" type="button" class="my-auto flex items-center gap-2 border border-gray-200/60 dark:border-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-800 rounded-lg px-3 py-2 text-sm font-medium transition-colors" :class="chatItem.is_outbound ? 'bg-white/20 text-white border-white/20 hover:bg-white/30' : 'bg-gray-50 dark:bg-zinc-800/50 text-gray-700 dark:text-zinc-300'">
                                         <span class="my-auto">
                                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
                                               <path stroke-linecap="round" stroke-linejoin="round" d="m9 9 10.5-3m0 6.553v3.75a2.25 2.25 0 0 1-1.632 2.163l-1.32.377a1.803 1.803 0 1 1-.99-3.467l2.31-.66a2.25 2.25 0 0 0 1.632-2.163Zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 0 1-1.632 2.163l-1.32.377a1.803 1.803 0 0 1-.99-3.467l2.31-.66A2.25 2.25 0 0 0 9 15.553Z" />
@@ -146,13 +146,13 @@
                                     </button>
                                 </div>
 
-                                <div class="text-xs mt-1" :class="chatItem.is_outbound ? 'text-white/80' : 'text-gray-600'">
+                                <div class="text-xs mt-1.5" :class="chatItem.is_outbound ? 'text-white/70' : 'text-gray-500 dark:text-zinc-400'">
                                     Audio • {{ formatBase64Bytes(chatItem.lxmf_message.fields.audio.audio_bytes) }}
                                 </div>
                             </div>
 
                             <!-- file attachment fields -->
-                            <div v-if="chatItem.lxmf_message.fields?.file_attachments" class="space-y-1">
+                            <div v-if="chatItem.lxmf_message.fields?.file_attachments" class="space-y-2 mt-1">
                                 <a
                                     v-for="file_attachment of chatItem.lxmf_message.fields?.file_attachments ?? []"
                                     :key="file_attachment.file_name"
@@ -160,15 +160,15 @@
                                     target="_blank"
                                     :download="file_attachment.file_name"
                                     :href="`data:application/octet-stream;base64,${file_attachment.file_bytes}`"
-                                    class="flex border border-gray-300 dark:border-zinc-800 hover:bg-gray-100 rounded px-2 py-1 text-sm text-gray-700 font-semibold cursor-pointer space-x-2 bg-[#efefef]">
+                                    class="flex items-center gap-3 border rounded-lg px-3 py-2 text-sm font-medium cursor-pointer transition-colors" :class="chatItem.is_outbound ? 'bg-white/20 text-white border-white/20 hover:bg-white/30' : 'bg-gray-50 dark:bg-zinc-800/50 text-gray-700 dark:text-zinc-300 border-gray-200/60 dark:border-zinc-700 hover:bg-gray-100 dark:hover:bg-zinc-800'">
                                     <div class="my-auto">
                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
                                             <path stroke-linecap="round" stroke-linejoin="round" d="m18.375 12.739-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13"></path>
                                         </svg>
                                     </div>
-                                    <div class="my-auto w-full">
-                                        <div>{{ file_attachment.file_name }}</div>
-                                        <div class="text-xs font-normal text-gray-500">{{ formatBase64Bytes(file_attachment.file_bytes) }}</div>
+                                    <div class="flex-1 min-w-0">
+                                        <div class="truncate">{{ file_attachment.file_name }}</div>
+                                        <div class="text-xs font-normal mt-0.5" :class="chatItem.is_outbound ? 'text-white/60' : 'text-gray-500 dark:text-zinc-400'">{{ formatBase64Bytes(file_attachment.file_bytes) }}</div>
                                     </div>
                                     <div class="my-auto">
                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
@@ -181,10 +181,10 @@
                         </div>
 
                         <!-- actions -->
-                        <div v-if="chatItem.is_actions_expanded" class="border-t p-1 bg-[#efefef] text-white">
+                        <div v-if="chatItem.is_actions_expanded" class="border-t px-4 py-2.5" :class="chatItem.is_outbound ? 'border-white/20 bg-white/10' : 'border-gray-200/60 dark:border-zinc-800/60 bg-gray-50/50 dark:bg-zinc-900/50'">
 
                             <!-- delete message -->
-                            <button @click.stop="deleteChatItem(chatItem)" type="button" class="inline-flex items-center gap-x-1 rounded-md bg-red-500 px-2 py-1 text-xs font-semibold text-white shadow-sm hover:bg-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500">
+                            <button @click.stop="deleteChatItem(chatItem)" type="button" class="inline-flex items-center gap-x-1.5 rounded-lg bg-red-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-red-600 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500">
                                 Delete
                             </button>
 
@@ -193,12 +193,12 @@
                     </div>
 
                     <!-- message state -->
-                    <div v-if="chatItem.is_outbound" class="flex text-right" :class="[ ['cancelled', 'failed'].includes(chatItem.lxmf_message.state) ? 'text-red-500' : 'text-gray-500' ]">
-                        <div class="flex ml-auto space-x-1">
+                    <div v-if="chatItem.is_outbound" class="flex text-right mt-1.5 px-1" :class="[ ['cancelled', 'failed'].includes(chatItem.lxmf_message.state) ? 'text-red-500 dark:text-red-400' : 'text-gray-400 dark:text-zinc-500' ]">
+                        <div class="flex ml-auto items-center space-x-1.5 text-xs">
 
                             <!-- state label -->
                             <div class="my-auto">
-                                <span @click="showSentMessageInfo(chatItem.lxmf_message)" class="space-x-1 cursor-pointer">
+                                <span @click="toggleSentMessageInfo(chatItem.lxmf_message.hash)" class="space-x-1 cursor-pointer hover:underline">
                                     <span>{{ chatItem.lxmf_message.state }}</span>
                                     <span v-if="chatItem.lxmf_message.state === 'outbound' && chatItem.lxmf_message.delivery_attempts >= 1">(attempt {{ chatItem.lxmf_message.delivery_attempts + 1 }})</span>
                                     <span v-if="chatItem.lxmf_message.state === 'sent' && chatItem.lxmf_message.method === 'opportunistic' && chatItem.lxmf_message.delivery_attempts >= 1">(attempt {{ chatItem.lxmf_message.delivery_attempts }})</span>
@@ -241,18 +241,23 @@
                     </div>
 
                     <!-- inbound message info -->
-                    <div v-if="!chatItem.is_outbound" class="text-xs text-gray-500 mt-0.5 flex flex-col">
+                    <div v-if="!chatItem.is_outbound" class="text-xs text-gray-400 dark:text-zinc-500 mt-1.5 px-1 flex flex-col">
 
                         <!-- received timestamp -->
-                        <span @click="showReceivedMessageInfo(chatItem.lxmf_message)" class="cursor-pointer">{{ formatTimeAgo(chatItem.lxmf_message.created_at) }}</span>
+                        <span @click="toggleReceivedMessageInfo(chatItem.lxmf_message.hash)" class="cursor-pointer hover:underline">{{ formatTimeAgo(chatItem.lxmf_message.created_at) }}</span>
 
+                    </div>
+
+                    <!-- expanded message details -->
+                    <div v-if="expandedMessageInfo === chatItem.lxmf_message.hash" class="mt-2 px-1 text-xs text-gray-500 dark:text-zinc-400 space-y-0.5">
+                        <div v-for="(line, index) in getMessageInfoLines(chatItem.lxmf_message, chatItem.is_outbound)" :key="index">{{ line }}</div>
                     </div>
 
                 </div>
 
                 <!-- load previous -->
-                <button v-show="!isLoadingPrevious && hasMorePrevious" id="load-previous" @click="loadPrevious" type="button" class="flex space-x-2 mx-auto bg-gray-200 px-3 py-1 hover:bg-gray-300 rounded-full shadow">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
+                <button v-show="!isLoadingPrevious && hasMorePrevious" id="load-previous" @click="loadPrevious" type="button" class="flex items-center gap-2 mx-auto mt-4 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 px-4 py-2 hover:bg-gray-50 dark:hover:bg-zinc-800 rounded-full shadow-sm text-sm font-medium text-gray-700 dark:text-zinc-300 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
                         <path stroke-linecap="round" stroke-linejoin="round" d="m15 11.25-3-3m0 0-3 3m3-3v7.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
                     </svg>
                     <span>Load Previous</span>
@@ -263,8 +268,8 @@
         </div>
 
         <!-- send message -->
-        <div class="w-full border-gray-300 dark:border-zinc-800 border-t p-2">
-            <div class="mx-auto">
+        <div class="w-full border-t border-gray-200/60 dark:border-zinc-800/60 bg-white/80 dark:bg-zinc-900/50 backdrop-blur-sm px-3 sm:px-4 py-2.5">
+            <div class="w-full">
 
                 <!-- message composer -->
                 <div>
@@ -289,9 +294,9 @@
                             <div class="attachment-card__body w-full">
                                 <div class="attachment-card__title">Voice Note</div>
                                 <div class="attachment-card__meta">{{ formatBytes(newMessageAudio.audio_blob.size) }}</div>
-                                <audio controls class="w-full mt-2 rounded-full bg-white/60 dark:bg-zinc-800/70">
-                                    <source :src="newMessageAudio.audio_preview_url" type="audio/wav"/>
-                                </audio>
+                            <audio controls class="w-full mt-2 rounded-lg shadow-sm audio-controls-dark" style="height:54px;">
+                                <source :src="newMessageAudio.audio_preview_url" type="audio/wav"/>
+                            </audio>
                             </div>
                             <button @click="removeAudioAttachment" type="button" class="attachment-card__remove">
                                 <MaterialDesignIcon icon-name="delete" class="w-4 h-4"/>
@@ -321,12 +326,12 @@
                         v-model="newMessageText"
                         @keydown.enter.exact.native.prevent="onEnterPressed"
                         @keydown.enter.shift.exact.native.prevent="onShiftEnterPressed"
-                        class="bg-gray-50 border border-gray-300 dark:border-zinc-800 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-zinc-800 dark:text-zinc-100 dark:border-zinc-900"
-                        rows="3"
-                        placeholder="Send a message..."></textarea>
+                        class="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 text-gray-900 dark:text-zinc-100 text-sm rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 block w-full px-3 sm:px-4 py-2 resize-none shadow-sm transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500"
+                        rows="2"
+                        placeholder="Type a message..."></textarea>
 
                     <!-- action button -->
-                    <div class="flex flex-wrap gap-2 items-center mt-3">
+                    <div class="flex flex-wrap gap-2 items-center mt-2">
                         <button @click="addFilesToMessage" type="button" class="attachment-action-button">
                             <MaterialDesignIcon icon-name="paperclip-plus" class="w-4 h-4"/>
                             <span>Add Files</span>
@@ -359,20 +364,91 @@
     </div>
 
     <!-- no peer selected -->
-    <div v-else class="flex flex-col mx-auto my-auto text-center leading-5">
-        <div class="mx-auto mb-1 ">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 dark:text-white">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 0 1-.825-.242m9.345-8.334a2.126 2.126 0 0 0-.476-.095 48.64 48.64 0 0 0-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0 0 11.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155" />
-            </svg>
+    <div v-else class="flex flex-col h-full">
+        <div class="flex-1 flex flex-col items-center justify-center text-center px-4">
+            <div class="mb-4">
+                <div class="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/30 dark:to-blue-800/30 flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-8 h-8 text-blue-600 dark:text-blue-400">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 0 1-.825-.242m9.345-8.334a2.126 2.126 0 0 0-.476-.095 48.64 48.64 0 0 0-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0 0 11.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155" />
+                    </svg>
+                </div>
+            </div>
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-zinc-100 mb-1">No Active Chat</h3>
+            <p class="text-sm text-gray-500 dark:text-zinc-400 mb-6">Select a peer from the sidebar or compose a new message below</p>
         </div>
-        <div class="font-semibold dark:text-white">No Active Chat</div>
-        <div class='dark:text-zinc-300'>Select a Peer to start chatting!</div>
-        <div class="mx-auto mt-2">
-            <button @click.stop="openLXMFAddress" type="button"
-                    class="my-auto inline-flex items-center gap-x-1 rounded-md bg-gray-500 px-2 py-1 text-sm font-semibold text-white shadow-sm hover:bg-gray-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500
-                dark:bg-zinc-800 dark:text-white dark:hover:bg-zinc-700 dark:focus-visible:outline-zinc-500">
-                Enter an LXMF Address
-            </button>
+        
+        <!-- compose message input -->
+        <div class="w-full border-t border-gray-200/60 dark:border-zinc-800/60 bg-white/80 dark:bg-zinc-900/50 backdrop-blur-sm px-3 sm:px-4 py-2.5">
+            <div class="w-full">
+                <div class="space-y-2">
+                    <div v-if="newMessageImage" class="attachment-card">
+                        <div class="attachment-card__preview" @click.stop="openImage(newMessageImageUrl)">
+                            <img v-if="newMessageImageUrl" :src="newMessageImageUrl" class="w-full h-full object-cover rounded-lg"/>
+                        </div>
+                        <div class="attachment-card__body">
+                            <div class="attachment-card__title">Image Attachment</div>
+                            <div class="attachment-card__meta">{{ formatBytes(newMessageImage.size) }}</div>
+                        </div>
+                        <button @click.stop="removeImageAttachment" type="button" class="attachment-card__remove">
+                            <MaterialDesignIcon icon-name="close" class="w-4 h-4"/>
+                        </button>
+                    </div>
+                    <div v-if="newMessageAudio" class="attachment-card">
+                        <div class="attachment-card__body w-full">
+                            <div class="attachment-card__title">Voice Note</div>
+                            <div class="attachment-card__meta">{{ formatBytes(newMessageAudio.audio_blob.size) }}</div>
+                            <audio controls class="w-full mt-2 rounded-lg shadow-sm audio-controls-dark" style="height:54px;">
+                                <source :src="newMessageAudio.audio_preview_url" type="audio/wav"/>
+                            </audio>
+                        </div>
+                        <button @click="removeAudioAttachment" type="button" class="attachment-card__remove">
+                            <MaterialDesignIcon icon-name="delete" class="w-4 h-4"/>
+                        </button>
+                    </div>
+                    <div v-if="newMessageFiles.length > 0" class="flex flex-wrap gap-2">
+                        <div v-for="file in newMessageFiles" :key="file.name + file.size" class="attachment-chip">
+                            <div class="flex items-center gap-2">
+                                <MaterialDesignIcon icon-name="paperclip" class="w-4 h-4 text-gray-500 dark:text-gray-300"/>
+                                <div class="text-sm text-gray-800 dark:text-gray-200 truncate max-w-[160px]">{{ file.name }}</div>
+                                <span class="text-xs text-gray-500 dark:text-gray-400">{{ formatBytes(file.size) }}</span>
+                            </div>
+                            <button @click="removeFileAttachment(file)" type="button" class="attachment-chip__remove">
+                                <MaterialDesignIcon icon-name="close" class="w-3.5 h-3.5"/>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-end gap-2 mt-2">
+                    <textarea
+                        ref="compose-input"
+                        id="compose-input"
+                        :readonly="isSendingMessage"
+                        v-model="composeAddress"
+                        @keydown.enter.exact.prevent="onComposeEnterPressed"
+                        class="flex-1 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 text-gray-900 dark:text-zinc-100 text-sm rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 px-3 sm:px-4 py-2 resize-none shadow-sm transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500"
+                        rows="1"
+                        placeholder="Enter LXMF address to compose..."></textarea>
+                    <button @click="onComposeSubmit" type="button" :disabled="!composeAddress || composeAddress.trim() === ''"
+                            class="inline-flex items-center justify-center rounded-xl bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700 disabled:bg-gray-400 dark:disabled:bg-zinc-500 disabled:cursor-not-allowed px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="flex flex-wrap gap-2 items-center mt-2">
+                    <button @click="addFilesToMessage" type="button" class="attachment-action-button">
+                        <MaterialDesignIcon icon-name="paperclip-plus" class="w-4 h-4"/>
+                        <span>Add Files</span>
+                    </button>
+                    <AddImageButton @add-image="onImageSelected"/>
+                    <AddAudioButton
+                        :is-recording-audio-attachment="isRecordingAudioAttachment"
+                        @start-recording="startRecordingAudioAttachment($event)"
+                        @stop-recording="stopRecordingAudioAttachment">
+                        <span>Recording: {{ audioAttachmentRecordingDuration }}</span>
+                    </AddAudioButton>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -429,6 +505,7 @@ export default {
             newMessageFiles: [],
             isSendingMessage: false,
             autoScrollOnNewMessage: true,
+            composeAddress: "",
 
             isRecordingAudioAttachment: false,
             audioAttachmentMicrophoneRecorder: null,
@@ -437,6 +514,7 @@ export default {
             audioAttachmentRecordingDuration: null,
             audioAttachmentRecordingTimer: null,
             lxmfMessageAudioAttachmentCache: {},
+            expandedMessageInfo: null,
             lxmfAudioModeToCodec2ModeMap: {
                 // https://github.com/markqvist/LXMF/blob/master/LXMF/LXMF.py#L21
                 0x01: "450PWB", // AM_CODEC2_450PWB
@@ -455,11 +533,15 @@ export default {
     beforeUnmount() {
         // stop listening for websocket messages
         WebSocketConnection.off("message", this.onWebsocketMessage);
+        GlobalEmitter.off("compose-new-message", this.onComposeNewMessageEvent);
     },
     mounted() {
 
         // listen for websocket messages
         WebSocketConnection.on("message", this.onWebsocketMessage);
+
+        // listen for compose new message event
+        GlobalEmitter.on("compose-new-message", this.onComposeNewMessageEvent);
 
     },
     methods: {
@@ -596,6 +678,37 @@ export default {
         },
         openLXMFAddress() {
             GlobalEmitter.emit("compose-new-message");
+        },
+        onComposeNewMessageEvent(destinationHash) {
+            if(!this.selectedPeer && !destinationHash){
+                this.$nextTick(() => {
+                    const composeInput = document.getElementById("compose-input");
+                    if(composeInput){
+                        composeInput.focus();
+                    }
+                });
+            }
+        },
+        async onComposeSubmit() {
+            if(!this.composeAddress || this.composeAddress.trim() === ""){
+                return;
+            }
+            let destinationHash = this.composeAddress.trim();
+            this.composeAddress = "";
+            await this.handleComposeAddress(destinationHash);
+        },
+        onComposeEnterPressed() {
+            this.onComposeSubmit();
+        },
+        async handleComposeAddress(destinationHash) {
+            if(destinationHash.startsWith("lxmf@")){
+                destinationHash = destinationHash.replace("lxmf@", "");
+            }
+            if(destinationHash.length !== 32){
+                DialogUtils.alert("Invalid Address");
+                return;
+            }
+            GlobalEmitter.emit("compose-new-message", destinationHash);
         },
         onLxmfMessageReceived(lxmfMessage) {
 
@@ -1464,89 +1577,64 @@ export default {
             this.$emit("reload-conversations");
 
         },
-        showSentMessageInfo: function(lxmfMessage) {
-
-            // basic info
-            const info = [
-                `Created: ${Utils.convertUnixMillisToLocalDateTimeString(lxmfMessage.timestamp * 1000)}`,
-                `Method: ${lxmfMessage.method ?? "unknown"}`,
-            ];
-
-            // add audio attachment size
-            if(lxmfMessage.fields?.audio?.audio_bytes){
-                const audioBytesLength = atob(lxmfMessage.fields?.audio?.audio_bytes).length;
-                info.push(`Audio Attachment: ${this.formatBytes(audioBytesLength)}`);
+        toggleSentMessageInfo: function(messageHash) {
+            if(this.expandedMessageInfo === messageHash){
+                this.expandedMessageInfo = null;
+            } else {
+                this.expandedMessageInfo = messageHash;
             }
-
-            // add image attachment size
-            if(lxmfMessage.fields?.image?.image_bytes){
-                const imageBytesLength = atob(lxmfMessage.fields?.image?.image_bytes).length;
-                info.push(`Image Attachment: ${this.formatBytes(imageBytesLength)}`);
-            }
-
-            // add file attachments size
-            if(lxmfMessage.fields?.file_attachments){
-                var filesLength = 0;
-                for(const fileAttachment of lxmfMessage.fields?.file_attachments){
-                    const fileBytesLength = atob(fileAttachment.file_bytes).length;
-                    filesLength += fileBytesLength;
-                }
-                info.push(`File Attachments: ${this.formatBytes(filesLength)}`);
-            }
-
-            // show message info
-            DialogUtils.alert(info.join("\n"));
-
         },
-        showReceivedMessageInfo: function(lxmfMessage) {
+        toggleReceivedMessageInfo: function(messageHash) {
+            if(this.expandedMessageInfo === messageHash){
+                this.expandedMessageInfo = null;
+            } else {
+                this.expandedMessageInfo = messageHash;
+            }
+        },
+        getMessageInfoLines: function(lxmfMessage, isOutbound) {
+            const lines = [];
 
-            // basic info
-            const info = [
-                `Sent: ${Utils.convertUnixMillisToLocalDateTimeString(lxmfMessage.timestamp * 1000)}`,
-                `Received: ${Utils.convertDateTimeToLocalDateTimeString(new Date(lxmfMessage.created_at))}`,
-                `Method: ${lxmfMessage.method ?? "unknown"}`,
-            ];
+            if(isOutbound){
+                lines.push(`Created: ${Utils.convertUnixMillisToLocalDateTimeString(lxmfMessage.timestamp * 1000)}`);
+            } else {
+                lines.push(`Sent: ${Utils.convertUnixMillisToLocalDateTimeString(lxmfMessage.timestamp * 1000)}`);
+                lines.push(`Received: ${Utils.convertDateTimeToLocalDateTimeString(new Date(lxmfMessage.created_at))}`);
+            }
 
-            // add audio attachment size
+            lines.push(`Method: ${lxmfMessage.method ?? "unknown"}`);
+
             if(lxmfMessage.fields?.audio?.audio_bytes){
                 const audioBytesLength = atob(lxmfMessage.fields?.audio?.audio_bytes).length;
-                info.push(`Audio Attachment: ${this.formatBytes(audioBytesLength)}`);
+                lines.push(`Audio Attachment: ${this.formatBytes(audioBytesLength)}`);
             }
 
-            // add image attachment size
             if(lxmfMessage.fields?.image?.image_bytes){
                 const imageBytesLength = atob(lxmfMessage.fields?.image?.image_bytes).length;
-                info.push(`Image Attachment: ${this.formatBytes(imageBytesLength)}`);
+                lines.push(`Image Attachment: ${this.formatBytes(imageBytesLength)}`);
             }
 
-            // add file attachments size
             if(lxmfMessage.fields?.file_attachments){
                 var filesLength = 0;
                 for(const fileAttachment of lxmfMessage.fields?.file_attachments){
                     const fileBytesLength = atob(fileAttachment.file_bytes).length;
                     filesLength += fileBytesLength;
                 }
-                info.push(`File Attachments: ${this.formatBytes(filesLength)}`);
+                lines.push(`File Attachments: ${this.formatBytes(filesLength)}`);
             }
 
-            // add signal quality if available
-            if(lxmfMessage.quality != null){
-                info.push(`Signal Quality: ${lxmfMessage.quality}%`);
+            if(!isOutbound){
+                if(lxmfMessage.quality != null){
+                    lines.push(`Signal Quality: ${lxmfMessage.quality}%`);
+                }
+                if(lxmfMessage.rssi != null){
+                    lines.push(`RSSI: ${lxmfMessage.rssi}dBm`);
+                }
+                if(lxmfMessage.snr != null){
+                    lines.push(`SNR: ${lxmfMessage.snr}dB`);
+                }
             }
 
-            // add rssi if available
-            if(lxmfMessage.rssi != null){
-                info.push(`RSSI: ${lxmfMessage.rssi}dBm`);
-            }
-
-            // add snr if available
-            if(lxmfMessage.snr != null){
-                info.push(`SNR: ${lxmfMessage.snr}dB`);
-            }
-
-            // show message info
-            DialogUtils.alert(info.join("\n"));
-
+            return lines;
         },
     },
     computed: {
@@ -1621,7 +1709,7 @@ export default {
 
 <style scoped>
 .attachment-card {
-    @apply relative flex gap-3 border border-gray-200 bg-white/80 dark:border-zinc-800 dark:bg-zinc-900/70 rounded-2xl p-3 shadow-sm;
+    @apply relative flex gap-3 border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-2xl p-3 shadow-sm;
 }
 .attachment-card__preview {
     @apply w-24 h-24 overflow-hidden rounded-xl bg-gray-100 dark:bg-zinc-800 cursor-pointer;
@@ -1639,12 +1727,28 @@ export default {
     @apply absolute top-2 right-2 inline-flex items-center justify-center w-6 h-6 rounded-full bg-gray-200 dark:bg-zinc-800 text-gray-600 dark:text-gray-200 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/40;
 }
 .attachment-chip {
-    @apply flex items-center justify-between gap-2 border border-gray-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/70 rounded-full px-3 py-1 text-xs shadow-sm;
+    @apply flex items-center justify-between gap-2 border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-full px-3 py-1 text-xs shadow-sm;
 }
 .attachment-chip__remove {
     @apply inline-flex items-center justify-center text-gray-500 dark:text-gray-300 hover:text-red-500;
 }
 .attachment-action-button {
     @apply inline-flex items-center gap-1 rounded-full border border-gray-200 dark:border-zinc-700 bg-white/90 dark:bg-zinc-900/80 px-3 py-1.5 text-xs font-semibold text-gray-800 dark:text-gray-100 shadow-sm hover:border-blue-400 dark:hover:border-blue-500 transition;
+}
+
+.audio-controls-light {
+    filter: invert(1) hue-rotate(180deg);
+}
+
+.dark .audio-controls-light {
+    filter: none;
+}
+
+.audio-controls-dark {
+    filter: none;
+}
+
+.dark .audio-controls-dark {
+    filter: invert(1) hue-rotate(180deg);
 }
 </style>

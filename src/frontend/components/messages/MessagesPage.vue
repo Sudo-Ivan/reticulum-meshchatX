@@ -103,37 +103,36 @@ export default {
     },
     methods: {
         async onComposeNewMessage(destinationHash) {
-
-            // ask for destination address if not provided
             if(destinationHash == null){
-                destinationHash = await DialogUtils.prompt("Enter LXMF Address");
-                if(!destinationHash){
+                if(this.selectedPeer){
                     return;
                 }
+                this.$nextTick(() => {
+                    const composeInput = document.getElementById("compose-input");
+                    if(composeInput){
+                        composeInput.focus();
+                    }
+                });
+                return;
             }
 
-            // if user provided an address with an "lxmf@" prefix, lets remove that to get the raw destination hash
             if(destinationHash.startsWith("lxmf@")){
                 destinationHash = destinationHash.replace("lxmf@", "");
             }
 
-            // fetch updated announce as we might be composing new message before we loaded the announces list
             await this.getLxmfDeliveryAnnounce(destinationHash);
 
-            // attempt to find existing peer so we can show their name
             const existingPeer = this.peers[destinationHash];
             if(existingPeer){
                 this.onPeerClick(existingPeer);
                 return;
             }
 
-            // simple attempt to prevent garbage input
             if(destinationHash.length !== 32){
                 DialogUtils.alert("Invalid Address");
                 return;
             }
 
-            // we didn't find an existing peer, so just use an unknown name
             this.onPeerClick({
                 display_name: "Unknown Peer",
                 destination_hash: destinationHash,

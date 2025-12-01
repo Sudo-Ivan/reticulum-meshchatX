@@ -44,12 +44,12 @@
                                 <MaterialDesignIcon icon-name="account-outline" class="w-6 h-6"/>
                             </div>
                         </div>
-                        <div class="mr-auto w-full pr-2">
-                            <div class="flex justify-between gap-2">
-                                <div class="text-gray-900 dark:text-gray-100 truncate" :title="conversation.custom_display_name ?? conversation.display_name" :class="{ 'font-semibold': conversation.is_unread || conversation.failed_messages_count > 0 }">
+                        <div class="mr-auto w-full pr-2 min-w-0">
+                            <div class="flex justify-between gap-2 min-w-0">
+                                <div class="text-gray-900 dark:text-gray-100 truncate min-w-0" :title="conversation.custom_display_name ?? conversation.display_name" :class="{ 'font-semibold': conversation.is_unread || conversation.failed_messages_count > 0 }">
                                     {{ conversation.custom_display_name ?? conversation.display_name }}
                                 </div>
-                                <div class="text-gray-500 dark:text-gray-400 text-xs whitespace-nowrap">
+                                <div class="text-gray-500 dark:text-gray-400 text-xs whitespace-nowrap flex-shrink-0">
                                     {{ formatTimeAgo(conversation.updated_at) }}
                                 </div>
                             </div>
@@ -128,7 +128,7 @@
                                 <MaterialDesignIcon icon-name="account-outline" class="w-6 h-6"/>
                             </div>
                         </div>
-                        <div>
+                        <div class="min-w-0 flex-1">
                             <div class="text-gray-900 dark:text-gray-100 truncate" :title="peer.custom_display_name ?? peer.display_name">{{ peer.custom_display_name ?? peer.display_name }}</div>
                             <div class="flex space-x-1 text-gray-500 dark:text-gray-400 text-sm">
 

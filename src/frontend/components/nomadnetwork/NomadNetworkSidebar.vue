@@ -40,7 +40,7 @@
                         </div>
                         <DropDownMenu>
                             <template #button>
-                                <IconButton class="bg-transparent dark:bg-transparent">
+                                <IconButton class="bg-transparent dark:bg-transparent w-8 h-8 p-0 flex items-center justify-center">
                                     <MaterialDesignIcon icon-name="dots-vertical" class="w-5 h-5"/>
                                 </IconButton>
                             </template>
