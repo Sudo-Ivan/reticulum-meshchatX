@@ -1,12 +1,13 @@
 {
   "name": "reticulum-meshchat",
   "version": "2.32.3",
-  "description": "",
+  "description": "A simple mesh network communications app powered by the Reticulum Network Stack",
+  "author": "Sudo-Ivan",
   "main": "electron/main.js",
   "scripts": {
     "watch": "npm run build-frontend -- --watch",
     "build-frontend": "vite build",
-    "build-backend": "python setup.py build",
+    "build-backend": "venv/bin/python setup.py build",
     "build": "npm run build-frontend && npm run build-backend",
     "electron-postinstall": "electron-builder install-app-deps",
     "electron": "npm run electron-postinstall && npm run build && electron .",
@@ -17,13 +18,16 @@
     "node": ">=18"
   },
   "devDependencies": {
-    "electron": "^35.7.5",
+    "electron": "^39.2.4",
     "electron-builder": "^24.6.3"
   },
   "build": {
     "appId": "com.sudoivan.reticulummeshchat",
     "productName": "Reticulum MeshChatX",
-    "asar": false,
+    "asar": true,
+    "asarUnpack": [
+      "build/exe/**/*"
+    ],
     "files": [
       "electron/**/*"
     ],
@@ -75,6 +79,7 @@
         "deb"
       ],
       "maintainer": "Sudo-Ivan",
+      "category": "Network",
       "extraFiles": [
         {
           "from": "build/exe",
