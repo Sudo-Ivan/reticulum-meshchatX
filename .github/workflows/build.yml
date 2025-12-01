@@ -25,7 +25,10 @@ jobs:
           python-version: "3.12"
 
       - name: Install Python Deps
-        run: pip install -r requirements.txt
+        run: |
+          python -m venv venv
+          venv\Scripts\pip install --upgrade pip
+          venv\Scripts\pip install -r requirements.txt
 
       - name: Install NodeJS Deps
         run: npm install
@@ -63,7 +66,10 @@ jobs:
           python-version: "3.11"
 
       - name: Install Python Deps
-        run: pip install -r requirements.txt
+        run: |
+          python3 -m venv venv
+          venv/bin/pip install --upgrade pip
+          venv/bin/pip install -r requirements.txt
 
       - name: Install NodeJS Deps
         run: npm install
@@ -100,8 +106,14 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install patchelf
+        run: sudo apt-get update && sudo apt-get install -y patchelf
+
       - name: Install Python Deps
-        run: pip install -r requirements.txt
+        run: |
+          python3 -m venv venv
+          venv/bin/pip install --upgrade pip
+          venv/bin/pip install -r requirements.txt
 
       - name: Install NodeJS Deps
         run: npm install
