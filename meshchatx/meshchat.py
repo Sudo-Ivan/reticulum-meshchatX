@@ -1384,7 +1384,7 @@ class ReticulumMeshChat:
                         print(e)
                 elif msg.type == WSMsgType.ERROR:
                     # ignore errors while handling message
-                    print("ws connection error %s" % websocket_response.exception())
+                    print(f"ws connection error {websocket_response.exception()}")
 
             # websocket closed
             self.websocket_clients.remove(websocket_response)
@@ -1707,7 +1707,7 @@ class ReticulumMeshChat:
                         print(e)
                 elif msg.type == WSMsgType.ERROR:
                     # ignore errors while handling message
-                    print("ws connection error %s" % websocket_response.exception())
+                    print(f"ws connection error {websocket_response.exception()}")
 
             # unregister audio packet handler now that the websocket has been closed
             audio_call.register_audio_packet_listener(on_audio_packet)
