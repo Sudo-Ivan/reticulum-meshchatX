@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from peewee import *
 from playhouse.migrate import migrate as migrate_database, SqliteMigrator
 
-latest_version = 5  # increment each time new database migrations are added
+latest_version = 6  # increment each time new database migrations are added
 database = DatabaseProxy()  # use a proxy object, as we will init real db client inside meshchat.py
 migrator = SqliteMigrator(database)
 
@@ -38,6 +38,12 @@ def migrate(current_version):
             migrator.add_column("announces", 'rssi', Announce.rssi),
             migrator.add_column("announces", 'snr', Announce.snr),
             migrator.add_column("announces", 'quality', Announce.quality),
+        )
+
+    # migrate to version 6
+    if current_version < 6:
+        migrate_database(
+            migrator.add_column("lxmf_messages", 'is_spam', LxmfMessage.is_spam),
         )
 
     return latest_version
@@ -129,6 +135,7 @@ class LxmfMessage(BaseModel):
     rssi = IntegerField(null=True)
     snr = FloatField(null=True)
     quality = FloatField(null=True)
+    is_spam = BooleanField(default=False)  # if true, message is marked as spam
     created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
     updated_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
 
@@ -165,3 +172,27 @@ class LxmfUserIcon(BaseModel):
     # define table name
     class Meta:
         table_name = "lxmf_user_icons"
+
+
+class BlockedDestination(BaseModel):
+
+    id = BigAutoField()
+    destination_hash = CharField(unique=True, index=True)  # unique destination hash that is blocked
+    created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
+    updated_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
+
+    # define table name
+    class Meta:
+        table_name = "blocked_destinations"
+
+
+class SpamKeyword(BaseModel):
+
+    id = BigAutoField()
+    keyword = CharField(unique=True, index=True)  # keyword to match against message content
+    created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
+    updated_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
+
+    # define table name
+    class Meta:
+        table_name = "spam_keywords"

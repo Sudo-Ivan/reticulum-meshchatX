@@ -85,6 +85,8 @@ class ReticulumMeshChat:
             database.LxmfMessage,
             database.LxmfConversationReadState,
             database.LxmfUserIcon,
+            database.BlockedDestination,
+            database.SpamKeyword,
         ])
 
         # init config
@@ -160,7 +162,7 @@ class ReticulumMeshChat:
         self.download_id_counter = 0
 
         # register audio call identity
-        self.audio_call_manager = AudioCallManager(identity=self.identity)
+        self.audio_call_manager = AudioCallManager(identity=self.identity, is_destination_blocked_callback=self.is_destination_blocked)
         self.audio_call_manager.register_incoming_call_callback(self.on_incoming_audio_call)
 
         # start background thread for auto announce loop
@@ -2359,6 +2361,122 @@ class ReticulumMeshChat:
                 "message": "ok",
             })
 
+        # get blocked destinations
+        @routes.get("/api/v1/blocked-destinations")
+        async def index(request):
+            blocked = database.BlockedDestination.select()
+            blocked_list = []
+            for b in blocked:
+                created_at = b.created_at
+                if isinstance(created_at, str):
+                    created_at_str = created_at
+                else:
+                    created_at_str = created_at.isoformat() if hasattr(created_at, 'isoformat') else str(created_at)
+                blocked_list.append({
+                    "destination_hash": b.destination_hash,
+                    "created_at": created_at_str
+                })
+            return web.json_response({
+                "blocked_destinations": blocked_list,
+            })
+
+        # add blocked destination
+        @routes.post("/api/v1/blocked-destinations")
+        async def index(request):
+            data = await request.json()
+            destination_hash = data.get("destination_hash", "")
+            if not destination_hash or len(destination_hash) != 32:
+                return web.json_response({"error": "Invalid destination hash"}, status=400)
+            
+            try:
+                database.BlockedDestination.create(destination_hash=destination_hash)
+                # drop any existing paths to this destination
+                try:
+                    RNS.Transport.drop_path(bytes.fromhex(destination_hash))
+                except:
+                    pass
+                return web.json_response({"message": "ok"})
+            except:
+                return web.json_response({"error": "Destination already blocked"}, status=400)
+
+        # remove blocked destination
+        @routes.delete("/api/v1/blocked-destinations/{destination_hash}")
+        async def index(request):
+            destination_hash = request.match_info.get("destination_hash", "")
+            if not destination_hash or len(destination_hash) != 32:
+                return web.json_response({"error": "Invalid destination hash"}, status=400)
+            
+            try:
+                blocked = database.BlockedDestination.get_or_none(database.BlockedDestination.destination_hash == destination_hash)
+                if blocked:
+                    blocked.delete_instance()
+                    return web.json_response({"message": "ok"})
+                else:
+                    return web.json_response({"error": "Destination not blocked"}, status=404)
+            except Exception as e:
+                return web.json_response({"error": str(e)}, status=500)
+
+        # get spam keywords
+        @routes.get("/api/v1/spam-keywords")
+        async def index(request):
+            keywords = database.SpamKeyword.select()
+            keyword_list = [{"id": k.id, "keyword": k.keyword, "created_at": k.created_at.isoformat()} for k in keywords]
+            return web.json_response({
+                "spam_keywords": keyword_list,
+            })
+
+        # add spam keyword
+        @routes.post("/api/v1/spam-keywords")
+        async def index(request):
+            data = await request.json()
+            keyword = data.get("keyword", "").strip()
+            if not keyword:
+                return web.json_response({"error": "Keyword is required"}, status=400)
+            
+            try:
+                database.SpamKeyword.create(keyword=keyword)
+                return web.json_response({"message": "ok"})
+            except:
+                return web.json_response({"error": "Keyword already exists"}, status=400)
+
+        # remove spam keyword
+        @routes.delete("/api/v1/spam-keywords/{keyword_id}")
+        async def index(request):
+            keyword_id = request.match_info.get("keyword_id", "")
+            try:
+                keyword_id = int(keyword_id)
+            except:
+                return web.json_response({"error": "Invalid keyword ID"}, status=400)
+            
+            try:
+                keyword = database.SpamKeyword.get_or_none(database.SpamKeyword.id == keyword_id)
+                if keyword:
+                    keyword.delete_instance()
+                    return web.json_response({"message": "ok"})
+                else:
+                    return web.json_response({"error": "Keyword not found"}, status=404)
+            except Exception as e:
+                return web.json_response({"error": str(e)}, status=500)
+
+        # mark message as spam or not spam
+        @routes.post("/api/v1/lxmf-messages/{hash}/spam")
+        async def index(request):
+            message_hash = request.match_info.get("hash", "")
+            data = await request.json()
+            is_spam = data.get("is_spam", False)
+            
+            try:
+                message = database.LxmfMessage.get_or_none(database.LxmfMessage.hash == message_hash)
+                if message:
+                    message.is_spam = is_spam
+                    message.updated_at = datetime.now(timezone.utc)
+                    message.save()
+                    return web.json_response({"message": "ok"})
+                else:
+                    return web.json_response({"error": "Message not found"}, status=404)
+            except Exception as e:
+                return web.json_response({"error": str(e)}, status=500)
+
         # called when web app has started
         async def on_startup(app):
 
@@ -3065,6 +3183,7 @@ class ReticulumMeshChat:
             "rssi": db_lxmf_message.rssi,
             "snr": db_lxmf_message.snr,
             "quality": db_lxmf_message.quality,
+            "is_spam": db_lxmf_message.is_spam,
             "created_at": db_lxmf_message.created_at,
             "updated_at": db_lxmf_message.updated_at,
         }
@@ -3089,10 +3208,51 @@ class ReticulumMeshChat:
         query = query.on_conflict(conflict_target=[database.LxmfUserIcon.destination_hash], update=data)
         query.execute()
 
+    # check if a destination is blocked
+    def is_destination_blocked(self, destination_hash: str) -> bool:
+        try:
+            blocked = database.BlockedDestination.get_or_none(
+                database.BlockedDestination.destination_hash == destination_hash
+            )
+            return blocked is not None
+        except:
+            return False
+
+    # check if message content matches spam keywords
+    def check_spam_keywords(self, title: str, content: str) -> bool:
+        try:
+            spam_keywords = database.SpamKeyword.select()
+            search_text = (title + " " + content).lower()
+            for keyword in spam_keywords:
+                if keyword.keyword.lower() in search_text:
+                    return True
+            return False
+        except:
+            return False
+
+    # check if message has attachments and should be rejected
+    def has_attachments(self, lxmf_fields: dict) -> bool:
+        try:
+            if LXMF.FIELD_FILE_ATTACHMENTS in lxmf_fields:
+                return len(lxmf_fields[LXMF.FIELD_FILE_ATTACHMENTS]) > 0
+            if LXMF.FIELD_IMAGE in lxmf_fields:
+                return True
+            if LXMF.FIELD_AUDIO in lxmf_fields:
+                return True
+            return False
+        except:
+            return False
+
     # handle an lxmf delivery from reticulum
     # NOTE: cant be async, as Reticulum doesn't await it
     def on_lxmf_delivery(self, lxmf_message: LXMF.LXMessage):
         try:
+            source_hash = lxmf_message.source_hash.hex()
+
+            # check if source is blocked - reject immediately
+            if self.is_destination_blocked(source_hash):
+                print(f"Rejecting LXMF message from blocked source: {source_hash}")
+                return
 
             # check if this lxmf message contains a telemetry request command from sideband
             is_sideband_telemetry_request = False
@@ -3107,8 +3267,28 @@ class ReticulumMeshChat:
                 print("Ignoring received LXMF message as it is a telemetry request command")
                 return
 
-            # upsert lxmf message to database
-            self.db_upsert_lxmf_message(lxmf_message)
+            # check for spam keywords
+            is_spam = False
+            message_title = lxmf_message.title if hasattr(lxmf_message, 'title') else ""
+            message_content = lxmf_message.content if hasattr(lxmf_message, 'content') else ""
+            
+            # check spam keywords
+            if self.check_spam_keywords(message_title, message_content):
+                is_spam = True
+                print(f"Marking LXMF message as spam due to keyword match: {source_hash}")
+
+            # reject attachments from blocked sources (already checked above, but double-check)
+            if self.has_attachments(lxmf_fields):
+                if self.is_destination_blocked(source_hash):
+                    print(f"Rejecting LXMF message with attachments from blocked source: {source_hash}")
+                    return
+                # reject attachments from spam sources
+                if is_spam:
+                    print(f"Rejecting LXMF message with attachments from spam source: {source_hash}")
+                    return
+
+            # upsert lxmf message to database with spam flag
+            self.db_upsert_lxmf_message(lxmf_message, is_spam=is_spam)
 
             # update lxmf user icon if icon appearance field is available
             try:
@@ -3178,7 +3358,7 @@ class ReticulumMeshChat:
         self.message_router.handle_outbound(lxmf_message)
 
     # upserts the provided lxmf message to the database
-    def db_upsert_lxmf_message(self, lxmf_message: LXMF.LXMessage):
+    def db_upsert_lxmf_message(self, lxmf_message: LXMF.LXMessage, is_spam: bool = False):
 
         # convert lxmf message to dict
         lxmf_message_dict = self.convert_lxmf_message_to_dict(lxmf_message)
@@ -3201,6 +3381,7 @@ class ReticulumMeshChat:
             "rssi": lxmf_message_dict["rssi"],
             "snr": lxmf_message_dict["snr"],
             "quality": lxmf_message_dict["quality"],
+            "is_spam": is_spam,
             "updated_at": datetime.now(timezone.utc),
         }
 
@@ -3444,6 +3625,13 @@ class ReticulumMeshChat:
     # NOTE: cant be async, as Reticulum doesn't await it
     def on_audio_call_announce_received(self, aspect, destination_hash, announced_identity, app_data, announce_packet_hash):
 
+        # check if source is blocked - drop announce and path if blocked
+        identity_hash = announced_identity.hash.hex()
+        if self.is_destination_blocked(identity_hash):
+            print(f"Dropping audio call announce from blocked source: {identity_hash}")
+            RNS.Transport.drop_path(destination_hash)
+            return
+
         # log received announce
         print("Received an announce from " + RNS.prettyhexrep(destination_hash) + " for [call.audio]")
 
@@ -3467,6 +3655,13 @@ class ReticulumMeshChat:
     # handle an announce received from reticulum, for an lxmf address
     # NOTE: cant be async, as Reticulum doesn't await it
     def on_lxmf_announce_received(self, aspect, destination_hash, announced_identity, app_data, announce_packet_hash):
+
+        # check if source is blocked - drop announce and path if blocked
+        identity_hash = announced_identity.hash.hex()
+        if self.is_destination_blocked(identity_hash):
+            print(f"Dropping announce from blocked source: {identity_hash}")
+            RNS.Transport.drop_path(destination_hash)
+            return
 
         # log received announce
         print("Received an announce from " + RNS.prettyhexrep(destination_hash) + " for [lxmf.delivery]")
