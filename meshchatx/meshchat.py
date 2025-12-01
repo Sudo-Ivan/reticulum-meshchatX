@@ -1116,7 +1116,11 @@ class ReticulumMeshChat:
                 interfaces[interface_name] = interface_details
 
             # handle SerialInterface, KISSInterface, and AX25KISSInterface
-            if interface_type in ("SerialInterface", "KISSInterface", "AX25KISSInterface"):
+            if interface_type in (
+                "SerialInterface",
+                "KISSInterface",
+                "AX25KISSInterface",
+            ):
                 # ensure port provided
                 interface_port = data.get("port")
                 if interface_port is None or interface_port == "":
@@ -5051,8 +5055,8 @@ class NomadnetDownloader:
         self.path = path
         self.data = data
         self.timeout = timeout
-        self.on_download_success = on_download_success
-        self.on_download_failure = on_download_failure
+        self._download_success_callback = on_download_success
+        self._download_failure_callback = on_download_failure
         self.on_progress_update = on_progress_update
         self.request_receipt = None
         self.is_cancelled = False
@@ -5077,7 +5081,7 @@ class NomadnetDownloader:
                 pass
 
         # notify that download was cancelled
-        self.on_download_failure("cancelled")
+        self._download_failure_callback("cancelled")
 
     # setup link to destination and request download
     async def download(
@@ -5117,7 +5121,7 @@ class NomadnetDownloader:
 
         # if we still don't have a path, we can't establish a link, so bail out
         if not RNS.Transport.has_path(self.destination_hash):
-            self.on_download_failure("Could not find path to destination.")
+            self._download_failure_callback("Could not find path to destination.")
             return
 
         # check if cancelled before establishing link
@@ -5153,7 +5157,7 @@ class NomadnetDownloader:
 
         # if we still haven't established a link, bail out
         if link.status is not RNS.Link.ACTIVE:
-            self.on_download_failure("Could not establish link to destination.")
+            self._download_failure_callback("Could not establish link to destination.")
 
     # link to destination was established, we should now request the download
     def link_established(self, link):
@@ -5176,11 +5180,11 @@ class NomadnetDownloader:
 
     # handle successful download
     def on_response(self, request_receipt: RNS.RequestReceipt):
-        self.on_download_success(request_receipt)
+        self._download_success_callback(request_receipt)
 
     # handle failure
     def on_failed(self, request_receipt=None):
-        self.on_download_failure("request_failed")
+        self._download_failure_callback("request_failed")
 
     # handle download progress
     def on_progress(self, request_receipt):

@@ -1,5 +1,5 @@
-from pathlib import Path
 import shutil
+from pathlib import Path
 
 TARGET = Path("meshchatx") / "public"
 
@@ -12,4 +12,3 @@ if TARGET.exists():
     shutil.rmtree(TARGET)
 
 TARGET.mkdir(parents=True, exist_ok=True)
-
