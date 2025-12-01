@@ -13,7 +13,7 @@ A heavily customized fork of [Reticulum MeshChat](https://github.com/liamcottle/
 - [ ] Multi-identity support.
 - [ ] Multi-language support
 - [ ] Offline Reticulum documentation tool
-- [ ] More tools (translate, LoRa calculator, LXMFy bots, etc)
+- [ ] More tools (translate, LoRa calculator, LXMFy bots, etc.)
 - [x] Codebase reorganization and cleanup.
 - [ ] Tests and proper CI/CD pipeline.
 - [ ] RNS hot reload 
@@ -62,5 +62,35 @@ The Electron build artifacts will still live under `dist/` for releases.
 
 ## Python packaging
 
-The backend now provides `pyproject.toml` so you can build/install a wheel with `pip install .` or `python -m build`. Before packaging, run `python3 scripts/sync_version.py` (or `make sync-version`) so the generated `src/version.py` reflects the `package.json` version that the Electron artifacts use. The same version helper drives `meshchat.get_app_version()` and `setup.py`, so the CLI release metadata, wheel and AppImage/NSIS bundles stay aligned.
+The backend uses Poetry with `pyproject.toml` for dependency management and packaging. Before building, run `python3 scripts/sync_version.py` (or `make sync-version`) to ensure the generated `src/version.py` reflects the version from `package.json` that the Electron artifacts use. This keeps the CLI release metadata, wheel packages, and other bundles aligned.
+
+### Building with Poetry
+
+```bash
+# Install dependencies
+poetry install
+
+# Build the package
+poetry build
+
+# Install locally for testing
+pip install dist/*.whl
+```
+
+### Building with pip (alternative)
+
+If you prefer pip, you can build/install directly:
+
+```bash
+# Build the wheel
+pip install build
+python -m build
+
+# Install locally
+pip install .
+```
+
+### cx_Freeze (for AppImage/NSIS)
+
+The `cx_setup.py` script uses cx_Freeze for creating standalone executables (AppImage for Linux, NSIS for Windows). This is separate from the Poetry/pip packaging workflow.
 
