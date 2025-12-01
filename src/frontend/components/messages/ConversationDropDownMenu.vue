@@ -35,6 +35,20 @@
                 <span>Set Custom Display Name</span>
             </DropDownMenuItem>
 
+            <!-- block/unblock button -->
+            <div class="border-t">
+                <DropDownMenuItem v-if="!isBlocked" @click="onBlockDestination">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-5 text-red-500">
+                        <path fill-rule="evenodd" d="M12 1.5a5.25 5.25 0 0 0-5.25 5.25v3a3 3 0 0 0-3 3v6.75a3 3 0 0 0 3 3h10.5a3 3 0 0 0 3-3V13.5a3 3 0 0 0-3-3v-3c0-2.9-2.35-5.25-5.25-5.25Zm-1.5 8.25v3a1.5 1.5 0 0 0 3 0v-3a1.5 1.5 0 0 0-3 0Z" clip-rule="evenodd" />
+                    </svg>
+                    <span class="text-red-500">Block User</span>
+                </DropDownMenuItem>
+                <DropDownMenuItem v-else @click="onUnblockDestination">
+                    <MaterialDesignIcon icon-name="check-circle" class="size-5 text-green-500"/>
+                    <span class="text-green-500">Unblock User</span>
+                </DropDownMenuItem>
+            </div>
+
             <!-- delete message history button -->
             <div class="border-t">
                 <DropDownMenuItem @click="onDeleteMessageHistory">
@@ -53,6 +67,7 @@
 import DropDownMenu from "../DropDownMenu.vue";
 import DropDownMenuItem from "../DropDownMenuItem.vue";
 import IconButton from "../IconButton.vue";
+import MaterialDesignIcon from "../MaterialDesignIcon.vue";
 import DialogUtils from "../../js/DialogUtils";
 
 export default {
@@ -61,6 +76,7 @@ export default {
         IconButton,
         DropDownMenuItem,
         DropDownMenu,
+        MaterialDesignIcon,
     },
     props: {
         peer: Object,
@@ -68,8 +84,72 @@ export default {
     emits: [
         "conversation-deleted",
         "set-custom-display-name",
+        "block-status-changed",
     ],
+    data() {
+        return {
+            isBlocked: false,
+            blockedDestinations: [],
+        };
+    },
+    async mounted() {
+        await this.loadBlockedDestinations();
+    },
+    watch: {
+        peer: {
+            handler() {
+                this.checkIfBlocked();
+            },
+            immediate: true,
+        },
+    },
     methods: {
+        async loadBlockedDestinations() {
+            try {
+                const response = await window.axios.get("/api/v1/blocked-destinations");
+                this.blockedDestinations = response.data.blocked_destinations || [];
+                this.checkIfBlocked();
+            } catch(e) {
+                console.log(e);
+            }
+        },
+        checkIfBlocked() {
+            if (!this.peer) {
+                this.isBlocked = false;
+                return;
+            }
+            this.isBlocked = this.blockedDestinations.some(
+                b => b.destination_hash === this.peer.destination_hash
+            );
+        },
+        async onBlockDestination() {
+            if (!await DialogUtils.confirm("Are you sure you want to block this user? They will not be able to send you messages or establish links.")) {
+                return;
+            }
+
+            try {
+                await window.axios.post("/api/v1/blocked-destinations", {
+                    destination_hash: this.peer.destination_hash,
+                });
+                await this.loadBlockedDestinations();
+                DialogUtils.alert("User blocked successfully");
+                this.$emit("block-status-changed");
+            } catch(e) {
+                DialogUtils.alert("Failed to block user");
+                console.log(e);
+            }
+        },
+        async onUnblockDestination() {
+            try {
+                await window.axios.delete(`/api/v1/blocked-destinations/${this.peer.destination_hash}`);
+                await this.loadBlockedDestinations();
+                DialogUtils.alert("User unblocked successfully");
+                this.$emit("block-status-changed");
+            } catch(e) {
+                DialogUtils.alert("Failed to unblock user");
+                console.log(e);
+            }
+        },
         async onDeleteMessageHistory() {
 
             // ask user to confirm deleting conversation history

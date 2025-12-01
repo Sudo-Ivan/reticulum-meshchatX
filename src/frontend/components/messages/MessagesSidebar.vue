@@ -59,9 +59,7 @@
                         </div>
                         <div class="flex items-center space-x-1">
                             <div v-if="conversation.has_attachments" class="text-gray-500 dark:text-gray-300">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4">
-                                    <path d="M15.26 5.01a2.25 2.25 0 0 1 3.182 3.182L11.44 15.195a3 3 0 0 1-4.243-4.243l6.364-6.364a.75.75 0 0 1 1.06 1.06l-6.364 6.364a1.5 1.5 0 1 0 2.121 2.121l6.999-6.998a.75.75 0 0 0-1.06-1.06l-6.364 6.363a.75.75 0 1 1-1.06-1.06Z"/>
-                                </svg>
+                                <MaterialDesignIcon icon-name="paperclip" class="w-4 h-4"/>
                             </div>
                             <div v-if="conversation.is_unread" class="my-auto ml-1">
                                 <div class="bg-blue-500 dark:bg-blue-400 rounded-full p-1"></div>

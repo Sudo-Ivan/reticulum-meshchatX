@@ -69,7 +69,8 @@
                     v-if="selectedPeer"
                     :peer="selectedPeer"
                     @conversation-deleted="onConversationDeleted"
-                    @set-custom-display-name="updateCustomDisplayName"/>
+                    @set-custom-display-name="updateCustomDisplayName"
+                    @block-status-changed="loadBlockedDestinations"/>
                 
                 <!-- popout button -->
                 <IconButton @click="openConversationPopout" title="Pop out chat" class="text-gray-500 dark:text-zinc-400 hover:text-gray-700 dark:hover:text-zinc-200">
@@ -97,12 +98,22 @@
                     <div @click="onChatItemClick(chatItem)" class="relative rounded-2xl overflow-hidden transition-all duration-200 hover:shadow-md" :class="[ 
                         ['cancelled', 'failed'].includes(chatItem.lxmf_message.state) 
                             ? 'bg-red-500 text-white shadow-sm' 
+                            : chatItem.lxmf_message.is_spam
+                                ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-900 dark:text-yellow-100 border border-yellow-300 dark:border-yellow-700 shadow-sm'
                             : chatItem.is_outbound 
                                 ? 'bg-blue-600 text-white shadow-sm' 
                                 : 'bg-white dark:bg-zinc-900 text-gray-900 dark:text-zinc-100 border border-gray-200/60 dark:border-zinc-800/60 shadow-sm' 
                     ]">
 
                         <div class="w-full space-y-1 px-4 py-2.5">
+
+                            <!-- spam badge -->
+                            <div v-if="chatItem.lxmf_message.is_spam" class="flex items-center gap-1.5 text-xs font-medium mb-1" :class="chatItem.is_outbound ? 'text-yellow-200' : 'text-yellow-700 dark:text-yellow-300'">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                                </svg>
+                                <span>Marked as Spam</span>
+                            </div>
 
                             <!-- content -->
                             <div v-if="chatItem.lxmf_message.content" class="text-sm leading-relaxed whitespace-pre-wrap break-words" style="font-family:inherit;">{{ chatItem.lxmf_message.content }}</div>
@@ -270,6 +281,14 @@
         <!-- send message -->
         <div class="w-full border-t border-gray-200/60 dark:border-zinc-800/60 bg-white/80 dark:bg-zinc-900/50 backdrop-blur-sm px-3 sm:px-4 py-2.5">
             <div class="w-full">
+
+                <!-- blocked user notification -->
+                <div v-if="isSelectedPeerBlocked" class="mb-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                    </svg>
+                    <span class="text-sm text-yellow-800 dark:text-yellow-200">You have blocked this user. They cannot send you messages or establish links.</span>
+                </div>
 
                 <!-- message composer -->
                 <div>
@@ -475,6 +494,8 @@ export default {
             lxmfMessageAudioAttachmentCache: {},
             expandedMessageInfo: null,
             imageModalUrl: null,
+            isSelectedPeerBlocked: false,
+            blockedDestinations: [],
             lxmfAudioModeToCodec2ModeMap: {
                 // https://github.com/markqvist/LXMF/blob/master/LXMF/LXMF.py#L21
                 0x01: "450PWB", // AM_CODEC2_450PWB
@@ -495,6 +516,14 @@ export default {
         WebSocketConnection.off("message", this.onWebsocketMessage);
         GlobalEmitter.off("compose-new-message", this.onComposeNewMessageEvent);
     },
+    watch: {
+        selectedPeer: {
+            handler() {
+                this.checkIfSelectedPeerBlocked();
+            },
+            immediate: true,
+        },
+    },
     mounted() {
 
         // listen for websocket messages
@@ -503,8 +532,29 @@ export default {
         // listen for compose new message event
         GlobalEmitter.on("compose-new-message", this.onComposeNewMessageEvent);
 
+        // load blocked destinations
+        this.loadBlockedDestinations();
+
     },
     methods: {
+        async loadBlockedDestinations() {
+            try {
+                const response = await window.axios.get("/api/v1/blocked-destinations");
+                this.blockedDestinations = response.data.blocked_destinations || [];
+                this.checkIfSelectedPeerBlocked();
+            } catch(e) {
+                console.log(e);
+            }
+        },
+        checkIfSelectedPeerBlocked() {
+            if (!this.selectedPeer) {
+                this.isSelectedPeerBlocked = false;
+                return;
+            }
+            this.isSelectedPeerBlocked = this.blockedDestinations.some(
+                b => b.destination_hash === this.selectedPeer.destination_hash
+            );
+        },
         close() {
             this.$emit("close");
         },
