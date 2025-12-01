@@ -71,7 +71,8 @@ class WebsocketClientInterface(Interface):
             self.websocket.send(data)
         except Exception as e:
             RNS.log(
-                f"Exception occurred while transmitting via {self!s}", RNS.LOG_ERROR,
+                f"Exception occurred while transmitting via {self!s}",
+                RNS.LOG_ERROR,
             )
             RNS.log(f"The contained exception was: {e!s}", RNS.LOG_ERROR)
             return
@@ -93,7 +94,9 @@ class WebsocketClientInterface(Interface):
         try:
             RNS.log(f"Connecting to Websocket for {self!s}...", RNS.LOG_DEBUG)
             self.websocket = connect(
-                f"{self.target_url}", max_size=None, compression=None,
+                f"{self.target_url}",
+                max_size=None,
+                compression=None,
             )
             RNS.log(f"Connected to Websocket for {self!s}", RNS.LOG_DEBUG)
             self.read_loop()

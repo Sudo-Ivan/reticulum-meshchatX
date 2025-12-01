@@ -146,7 +146,9 @@ class AudioCallManager:
 
     # attempts to initiate a call to the provided destination and returns the link hash on success
     async def initiate(
-        self, destination_hash: bytes, timeout_seconds: int = 15,
+        self,
+        destination_hash: bytes,
+        timeout_seconds: int = 15,
     ) -> AudioCall:
         # determine when to timeout
         timeout_after_seconds = time.time() + timeout_seconds
@@ -240,7 +242,7 @@ class AudioCallReceiver:
                         )
                         link.teardown()
                         return
-            except Exception:  # noqa: E722
+            except Exception:
                 # if we can't get identity yet, we'll check later
                 pass
 

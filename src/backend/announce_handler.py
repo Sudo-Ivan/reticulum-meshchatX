@@ -7,7 +7,11 @@ class AnnounceHandler:
 
     # we will just pass the received announce back to the provided callback
     def received_announce(
-        self, destination_hash, announced_identity, app_data, announce_packet_hash,
+        self,
+        destination_hash,
+        announced_identity,
+        app_data,
+        announce_packet_hash,
     ):
         try:
             # handle received announce
@@ -18,6 +22,6 @@ class AnnounceHandler:
                 app_data,
                 announce_packet_hash,
             )
-        except Exception:  # noqa: E722
+        except Exception:
             # ignore failure to handle received announce
             pass

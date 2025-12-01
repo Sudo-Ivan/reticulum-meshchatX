@@ -17,7 +17,9 @@ def migrate(current_version):
     if current_version < 2:
         migrate_database(
             migrator.add_column(
-                "lxmf_messages", "delivery_attempts", LxmfMessage.delivery_attempts,
+                "lxmf_messages",
+                "delivery_attempts",
+                LxmfMessage.delivery_attempts,
             ),
             migrator.add_column(
                 "lxmf_messages",
@@ -85,7 +87,7 @@ class Announce(BaseModel):
     identity_hash = CharField(  # noqa: F405
         index=True,
     )  # identity hash that announced the destination
-    identity_public_key = (  # noqa: F405
+    identity_public_key = (
         CharField()  # noqa: F405
     )  # base64 encoded public key, incase we want to recreate the identity manually
     app_data = TextField(null=True)  # noqa: F405  # base64 encoded app data bytes
@@ -133,7 +135,7 @@ class LxmfMessage(BaseModel):
     hash = CharField(unique=True)  # noqa: F405  # unique lxmf message hash
     source_hash = CharField(index=True)  # noqa: F405
     destination_hash = CharField(index=True)  # noqa: F405
-    state = (  # noqa: F405
+    state = (
         CharField()  # noqa: F405
     )  # state is converted from internal int to a human friendly string
     progress = FloatField()  # noqa: F405  # progress is converted from internal float 0.00-1.00 to float between 0.00/100 (2 decimal places)
@@ -150,7 +152,7 @@ class LxmfMessage(BaseModel):
     title = TextField()  # noqa: F405
     content = TextField()  # noqa: F405
     fields = TextField()  # noqa: F405  # json string
-    timestamp = (  # noqa: F405
+    timestamp = (
         FloatField()  # noqa: F405
     )  # timestamp of when the message was originally created (before ever being sent)
     rssi = IntegerField(null=True)  # noqa: F405
@@ -183,7 +185,7 @@ class LxmfUserIcon(BaseModel):
     destination_hash = CharField(unique=True)  # noqa: F405  # unique destination hash
     icon_name = CharField()  # noqa: F405  # material design icon name for the destination hash
     foreground_colour = CharField()  # noqa: F405  # hex colour to use for foreground (icon colour)
-    background_colour = (  # noqa: F405
+    background_colour = (
         CharField()  # noqa: F405
     )  # hex colour to use for background (background colour)
 
@@ -198,7 +200,8 @@ class LxmfUserIcon(BaseModel):
 class BlockedDestination(BaseModel):
     id = BigAutoField()  # noqa: F405
     destination_hash = CharField(  # noqa: F405
-        unique=True, index=True,
+        unique=True,
+        index=True,
     )  # unique destination hash that is blocked
     created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))  # noqa: F405
     updated_at = DateTimeField(default=lambda: datetime.now(timezone.utc))  # noqa: F405
@@ -211,7 +214,8 @@ class BlockedDestination(BaseModel):
 class SpamKeyword(BaseModel):
     id = BigAutoField()  # noqa: F405
     keyword = CharField(  # noqa: F405
-        unique=True, index=True,
+        unique=True,
+        index=True,
     )  # keyword to match against message content
     created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))  # noqa: F405
     updated_at = DateTimeField(default=lambda: datetime.now(timezone.utc))  # noqa: F405

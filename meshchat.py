@@ -64,7 +64,9 @@ class ReticulumMeshChat:
         # ensure a storage path exists for the loaded identity
         self.storage_dir = storage_dir or os.path.join("storage")
         self.storage_path = os.path.join(
-            self.storage_dir, "identities", identity.hash.hex(),
+            self.storage_dir,
+            "identities",
+            identity.hash.hex(),
         )
         print(f"Using Storage Path: {self.storage_path}")
         os.makedirs(self.storage_path, exist_ok=True)
@@ -177,12 +179,14 @@ class ReticulumMeshChat:
         )
         RNS.Transport.register_announce_handler(
             AnnounceHandler(
-                "lxmf.propagation", self.on_lxmf_propagation_announce_received,
+                "lxmf.propagation",
+                self.on_lxmf_propagation_announce_received,
             ),
         )
         RNS.Transport.register_announce_handler(
             AnnounceHandler(
-                "nomadnetwork.node", self.on_nomadnet_node_announce_received,
+                "nomadnetwork.node",
+                self.on_nomadnet_node_announce_received,
             ),
         )
 
@@ -215,7 +219,8 @@ class ReticulumMeshChat:
 
         # start background thread for auto syncing propagation nodes
         thread = threading.Thread(
-            target=asyncio.run, args=(self.announce_sync_propagation_nodes(),),
+            target=asyncio.run,
+            args=(self.announce_sync_propagation_nodes(),),
         )
         thread.daemon = True
         thread.start()
@@ -299,7 +304,7 @@ class ReticulumMeshChat:
                 self.message_router.set_outbound_propagation_node(
                     bytes.fromhex(destination_hash),
                 )
-            except Exception:  # noqa: E722
+            except Exception:
                 # failed to set propagation node, clear it to ensure we don't use an old one by mistake
                 self.remove_active_propagation_node()
 
@@ -326,7 +331,7 @@ class ReticulumMeshChat:
                 self.message_router.enable_propagation()
             else:
                 self.message_router.disable_propagation()
-        except Exception:  # noqa: E722
+        except Exception:
             print("failed to enable or disable propagation node")
 
     def _get_reticulum_section(self):
@@ -459,7 +464,8 @@ class ReticulumMeshChat:
         if "image" in fields or "audio" in fields:
             return True
         if "file_attachments" in fields and isinstance(
-            fields["file_attachments"], list,
+            fields["file_attachments"],
+            list,
         ):
             return len(fields["file_attachments"]) > 0
         return False
@@ -473,7 +479,8 @@ class ReticulumMeshChat:
 
         matches = set()
         query = database.LxmfMessage.select(
-            database.LxmfMessage.source_hash, database.LxmfMessage.destination_hash,
+            database.LxmfMessage.source_hash,
+            database.LxmfMessage.destination_hash,
         ).where(
             (
                 (database.LxmfMessage.source_hash == local_hash)
@@ -810,7 +817,9 @@ class ReticulumMeshChat:
                 # set optional AutoInterface options
                 InterfaceEditor.update_value(interface_details, data, "group_id")
                 InterfaceEditor.update_value(
-                    interface_details, data, "multicast_address_type",
+                    interface_details,
+                    data,
+                    "multicast_address_type",
                 )
                 InterfaceEditor.update_value(interface_details, data, "devices")
                 InterfaceEditor.update_value(interface_details, data, "ignored_devices")
@@ -1008,10 +1017,14 @@ class ReticulumMeshChat:
                 InterfaceEditor.update_value(interface_details, data, "callsign")
                 InterfaceEditor.update_value(interface_details, data, "id_interval")
                 InterfaceEditor.update_value(
-                    interface_details, data, "airtime_limit_long",
+                    interface_details,
+                    data,
+                    "airtime_limit_long",
                 )
                 InterfaceEditor.update_value(
-                    interface_details, data, "airtime_limit_short",
+                    interface_details,
+                    data,
+                    "airtime_limit_short",
                 )
 
             # handle RNodeMultiInterface
@@ -1200,7 +1213,7 @@ class ReticulumMeshChat:
                 try:
                     data = await request.json()
                     selected_interface_names = data.get("selected_interface_names")
-                except Exception:  # noqa: E722
+                except Exception:
                     # request data was not json, but we don't care
                     pass
 
@@ -1609,7 +1622,8 @@ class ReticulumMeshChat:
             # initiate audio call
             try:
                 audio_call = await self.audio_call_manager.initiate(
-                    destination_hash, timeout_seconds,
+                    destination_hash,
+                    timeout_seconds,
                 )
                 return web.json_response(
                     {
@@ -1652,7 +1666,7 @@ class ReticulumMeshChat:
                 if websocket_response.closed is False:
                     try:
                         AsyncUtils.run_async(websocket_response.send_bytes(data))
-                    except Exception:  # noqa: E722
+                    except Exception:
                         # ignore errors sending audio packets to websocket
                         pass
 
@@ -1663,7 +1677,7 @@ class ReticulumMeshChat:
                         AsyncUtils.run_async(
                             websocket_response.close(code=WSCloseCode.GOING_AWAY),
                         )
-                    except Exception:  # noqa: E722
+                    except Exception:
                         # ignore errors closing websocket
                         pass
 
@@ -1983,21 +1997,27 @@ class ReticulumMeshChat:
                     and lxmf_delivery_announce.app_data is not None
                 ):
                     operator_display_name = self.parse_lxmf_display_name(
-                        lxmf_delivery_announce.app_data, None,
+                        lxmf_delivery_announce.app_data,
+                        None,
                     )
                 elif (
                     nomadnetwork_node_announce is not None
                     and nomadnetwork_node_announce.app_data is not None
                 ):
-                    operator_display_name = ReticulumMeshChat.parse_nomadnetwork_node_display_name(
-                        nomadnetwork_node_announce.app_data, None,
+                    operator_display_name = (
+                        ReticulumMeshChat.parse_nomadnetwork_node_display_name(
+                            nomadnetwork_node_announce.app_data,
+                            None,
+                        )
                     )
 
                 # parse app_data so we can see if propagation is enabled or disabled for this node
                 is_propagation_enabled = None
                 per_transfer_limit = None
-                propagation_node_data = ReticulumMeshChat.parse_lxmf_propagation_node_app_data(
-                    announce.app_data,
+                propagation_node_data = (
+                    ReticulumMeshChat.parse_lxmf_propagation_node_app_data(
+                        announce.app_data,
+                    )
                 )
                 if propagation_node_data is not None:
                     is_propagation_enabled = propagation_node_data["enabled"]
@@ -2312,7 +2332,8 @@ class ReticulumMeshChat:
             # update display name if provided
             if len(display_name) > 0:
                 self.db_upsert_custom_destination_display_name(
-                    destination_hash, display_name,
+                    destination_hash,
+                    display_name,
                 )
                 return web.json_response(
                     {
@@ -2756,7 +2777,9 @@ class ReticulumMeshChat:
                             other_user_hash,
                         ),
                         "destination_hash": other_user_hash,
-                        "is_unread": ReticulumMeshChat.is_lxmf_conversation_unread(other_user_hash),
+                        "is_unread": ReticulumMeshChat.is_lxmf_conversation_unread(
+                            other_user_hash,
+                        ),
                         "failed_messages_count": ReticulumMeshChat.lxmf_conversation_failed_messages_count(
                             other_user_hash,
                         ),
@@ -2878,7 +2901,8 @@ class ReticulumMeshChat:
             destination_hash = data.get("destination_hash", "")
             if not destination_hash or len(destination_hash) != 32:
                 return web.json_response(
-                    {"error": "Invalid destination hash"}, status=400,
+                    {"error": "Invalid destination hash"},
+                    status=400,
                 )
 
             try:
@@ -2886,12 +2910,13 @@ class ReticulumMeshChat:
                 # drop any existing paths to this destination
                 try:
                     RNS.Transport.drop_path(bytes.fromhex(destination_hash))
-                except Exception:  # noqa: E722
+                except Exception:
                     pass
                 return web.json_response({"message": "ok"})
-            except Exception:  # noqa: E722
+            except Exception:
                 return web.json_response(
-                    {"error": "Destination already blocked"}, status=400,
+                    {"error": "Destination already blocked"},
+                    status=400,
                 )
 
         # remove blocked destination
@@ -2900,7 +2925,8 @@ class ReticulumMeshChat:
             destination_hash = request.match_info.get("destination_hash", "")
             if not destination_hash or len(destination_hash) != 32:
                 return web.json_response(
-                    {"error": "Invalid destination hash"}, status=400,
+                    {"error": "Invalid destination hash"},
+                    status=400,
                 )
 
             try:
@@ -2911,7 +2937,8 @@ class ReticulumMeshChat:
                     blocked.delete_instance()
                     return web.json_response({"message": "ok"})
                 return web.json_response(
-                    {"error": "Destination not blocked"}, status=404,
+                    {"error": "Destination not blocked"},
+                    status=404,
                 )
             except Exception as e:
                 return web.json_response({"error": str(e)}, status=500)
@@ -2945,9 +2972,10 @@ class ReticulumMeshChat:
             try:
                 database.SpamKeyword.create(keyword=keyword)
                 return web.json_response({"message": "ok"})
-            except Exception:  # noqa: E722
+            except Exception:
                 return web.json_response(
-                    {"error": "Keyword already exists"}, status=400,
+                    {"error": "Keyword already exists"},
+                    status=400,
                 )
 
         # remove spam keyword
@@ -2956,7 +2984,7 @@ class ReticulumMeshChat:
             keyword_id = request.match_info.get("keyword_id", "")
             try:
                 keyword_id = int(keyword_id)
-            except (ValueError, TypeError):  # noqa: E722
+            except (ValueError, TypeError):
                 return web.json_response({"error": "Invalid keyword ID"}, status=400)
 
             try:
@@ -2999,7 +3027,7 @@ class ReticulumMeshChat:
             if launch_browser:
                 try:
                     webbrowser.open(f"http://127.0.0.1:{port}")
-                except Exception:  # noqa: E722
+                except Exception:
                     print("failed to launch web browser")
 
         # create and run web app
@@ -3106,7 +3134,8 @@ class ReticulumMeshChat:
             self.config.lxmf_inbound_stamp_cost.set(value)
             # update the inbound stamp cost on the delivery destination
             self.message_router.set_inbound_stamp_cost(
-                self.local_lxmf_destination.hash, value,
+                self.local_lxmf_destination.hash,
+                value,
             )
             # re-announce to update the stamp cost in announces
             self.local_lxmf_destination.display_name = self.config.display_name.get()
@@ -3504,7 +3533,7 @@ class ReticulumMeshChat:
         for websocket_client in self.websocket_clients:
             try:
                 await websocket_client.send_str(data)
-            except Exception:  # noqa: E722
+            except Exception:
                 # do nothing if failed to broadcast to a specific websocket client
                 pass
 
@@ -3571,7 +3600,9 @@ class ReticulumMeshChat:
         remote_destination_hash_hex = None
         if remote_identity is not None:
             remote_destination_hash = RNS.Destination.hash(
-                remote_identity, "call", "audio",
+                remote_identity,
+                "call",
+                "audio",
             )
             remote_destination_hash_hex = remote_destination_hash.hex()
 
@@ -3674,7 +3705,9 @@ class ReticulumMeshChat:
             "method": self.convert_lxmf_method_to_string(lxmf_message),
             "delivery_attempts": lxmf_message.delivery_attempts,
             "next_delivery_attempt_at": getattr(
-                lxmf_message, "next_delivery_attempt", None,
+                lxmf_message,
+                "next_delivery_attempt",
+                None,
             ),  # attribute may not exist yet
             "title": lxmf_message.title.decode("utf-8"),
             "content": lxmf_message.content.decode("utf-8"),
@@ -3757,7 +3790,9 @@ class ReticulumMeshChat:
         if announce.aspect == "lxmf.delivery":
             display_name = self.parse_lxmf_display_name(announce.app_data)
         elif announce.aspect == "nomadnetwork.node":
-            display_name = ReticulumMeshChat.parse_nomadnetwork_node_display_name(announce.app_data)
+            display_name = ReticulumMeshChat.parse_nomadnetwork_node_display_name(
+                announce.app_data,
+            )
 
         # find lxmf user icon from database
         lxmf_user_icon = None
@@ -3857,7 +3892,8 @@ class ReticulumMeshChat:
         # upsert to database
         query = database.LxmfUserIcon.insert(data)
         query = query.on_conflict(
-            conflict_target=[database.LxmfUserIcon.destination_hash], update=data,
+            conflict_target=[database.LxmfUserIcon.destination_hash],
+            update=data,
         )
         query.execute()
 
@@ -3869,7 +3905,7 @@ class ReticulumMeshChat:
                 database.BlockedDestination.destination_hash == destination_hash,
             )
             return blocked is not None
-        except Exception:  # noqa: E722
+        except Exception:
             return False
 
     # check if message content matches spam keywords
@@ -3882,7 +3918,7 @@ class ReticulumMeshChat:
                 if keyword.keyword.lower() in search_text:
                     return True
             return False
-        except Exception:  # noqa: E722
+        except Exception:
             return False
 
     # check if message has attachments and should be rejected
@@ -3896,7 +3932,7 @@ class ReticulumMeshChat:
             if LXMF.FIELD_AUDIO in lxmf_fields:
                 return True
             return False
-        except Exception:  # noqa: E722
+        except Exception:
             return False
 
     # handle an lxmf delivery from reticulum
@@ -4046,7 +4082,9 @@ class ReticulumMeshChat:
 
     # upserts the provided lxmf message to the database
     def db_upsert_lxmf_message(
-        self, lxmf_message: LXMF.LXMessage, is_spam: bool = False,
+        self,
+        lxmf_message: LXMF.LXMessage,
+        is_spam: bool = False,
     ):
         # convert lxmf message to dict
         lxmf_message_dict = self.convert_lxmf_message_to_dict(lxmf_message)
@@ -4076,7 +4114,8 @@ class ReticulumMeshChat:
         # upsert to database
         query = database.LxmfMessage.insert(data)
         query = query.on_conflict(
-            conflict_target=[database.LxmfMessage.hash], update=data,
+            conflict_target=[database.LxmfMessage.hash],
+            update=data,
         )
         query.execute()
 
@@ -4116,14 +4155,16 @@ class ReticulumMeshChat:
         # upsert to database
         query = database.Announce.insert(data)
         query = query.on_conflict(
-            conflict_target=[database.Announce.destination_hash], update=data,
+            conflict_target=[database.Announce.destination_hash],
+            update=data,
         )
         query.execute()
 
     # upserts a custom destination display name to the database
     @staticmethod
     def db_upsert_custom_destination_display_name(
-        destination_hash: str, display_name: str,
+        destination_hash: str,
+        display_name: str,
     ):
         # prepare data to insert or update
         data = {
@@ -4143,7 +4184,9 @@ class ReticulumMeshChat:
     # upserts a custom destination display name to the database
     @staticmethod
     def db_upsert_favourite(
-        destination_hash: str, display_name: str, aspect: str,
+        destination_hash: str,
+        display_name: str,
+        aspect: str,
     ):
         # prepare data to insert or update
         data = {
@@ -4397,7 +4440,11 @@ class ReticulumMeshChat:
 
         # upsert announce to database
         self.db_upsert_announce(
-            announced_identity, destination_hash, aspect, app_data, announce_packet_hash,
+            announced_identity,
+            destination_hash,
+            aspect,
+            app_data,
+            announce_packet_hash,
         )
 
         # find announce from database
@@ -4448,7 +4495,11 @@ class ReticulumMeshChat:
 
         # upsert announce to database
         self.db_upsert_announce(
-            announced_identity, destination_hash, aspect, app_data, announce_packet_hash,
+            announced_identity,
+            destination_hash,
+            aspect,
+            app_data,
+            announce_packet_hash,
         )
 
         # find announce from database
@@ -4498,7 +4549,11 @@ class ReticulumMeshChat:
 
         # upsert announce to database
         self.db_upsert_announce(
-            announced_identity, destination_hash, aspect, app_data, announce_packet_hash,
+            announced_identity,
+            destination_hash,
+            aspect,
+            app_data,
+            announce_packet_hash,
         )
 
         # find announce from database
@@ -4626,7 +4681,11 @@ class ReticulumMeshChat:
 
         # upsert announce to database
         self.db_upsert_announce(
-            announced_identity, destination_hash, aspect, app_data, announce_packet_hash,
+            announced_identity,
+            destination_hash,
+            aspect,
+            app_data,
+            announce_packet_hash,
         )
 
         # find announce from database
@@ -4676,7 +4735,9 @@ class ReticulumMeshChat:
         # if app data is available in database, it should be base64 encoded text that was announced
         # we will return the parsed lxmf display name as the conversation name
         if lxmf_announce is not None and lxmf_announce.app_data is not None:
-            return ReticulumMeshChat.parse_lxmf_display_name(app_data_base64=lxmf_announce.app_data)
+            return ReticulumMeshChat.parse_lxmf_display_name(
+                app_data_base64=lxmf_announce.app_data,
+            )
 
         # announce did not have app data, so provide a fallback name
         return "Anonymous Peer"
@@ -4684,14 +4745,15 @@ class ReticulumMeshChat:
     # reads the lxmf display name from the provided base64 app data
     @staticmethod
     def parse_lxmf_display_name(
-        app_data_base64: str, default_value: str | None = "Anonymous Peer",
+        app_data_base64: str,
+        default_value: str | None = "Anonymous Peer",
     ):
         try:
             app_data_bytes = base64.b64decode(app_data_base64)
             display_name = LXMF.display_name_from_app_data(app_data_bytes)
             if display_name is not None:
                 return display_name
-        except Exception:  # noqa: E722
+        except Exception:
             pass
 
         return default_value
@@ -4702,18 +4764,19 @@ class ReticulumMeshChat:
         try:
             app_data_bytes = base64.b64decode(app_data_base64)
             return LXMF.stamp_cost_from_app_data(app_data_bytes)
-        except Exception:  # noqa: E722
+        except Exception:
             return None
 
     # reads the nomadnetwork node display name from the provided base64 app data
     @staticmethod
     def parse_nomadnetwork_node_display_name(
-        app_data_base64: str, default_value: str | None = "Anonymous Node",
+        app_data_base64: str,
+        default_value: str | None = "Anonymous Node",
     ):
         try:
             app_data_bytes = base64.b64decode(app_data_base64)
             return app_data_bytes.decode("utf-8")
-        except Exception:  # noqa: E722
+        except Exception:
             return default_value
 
     # parses lxmf propagation node app data
@@ -4727,7 +4790,7 @@ class ReticulumMeshChat:
                 "timebase": int(data[1]),
                 "per_transfer_limit": int(data[3]),
             }
-        except Exception:  # noqa: E722
+        except Exception:
             return None
 
     # returns true if the conversation has messages newer than the last read at timestamp
@@ -4760,10 +4823,12 @@ class ReticulumMeshChat:
 
         # conversation is unread if last read at is before the latest incoming message creation date
         conversation_last_read_at = datetime.strptime(
-            lxmf_conversation_read_state.last_read_at, "%Y-%m-%d %H:%M:%S.%f%z",
+            lxmf_conversation_read_state.last_read_at,
+            "%Y-%m-%d %H:%M:%S.%f%z",
         )
         conversation_latest_message_at = datetime.strptime(
-            latest_incoming_lxmf_message.created_at, "%Y-%m-%d %H:%M:%S.%f%z",
+            latest_incoming_lxmf_message.created_at,
+            "%Y-%m-%d %H:%M:%S.%f%z",
         )
         return conversation_last_read_at < conversation_latest_message_at
 
@@ -4882,44 +4947,57 @@ class Config:
     last_announced_at = IntConfig("last_announced_at", None)
     theme = StringConfig("theme", "light")
     auto_resend_failed_messages_when_announce_received = BoolConfig(
-        "auto_resend_failed_messages_when_announce_received", True,
+        "auto_resend_failed_messages_when_announce_received",
+        True,
     )
     allow_auto_resending_failed_messages_with_attachments = BoolConfig(
-        "allow_auto_resending_failed_messages_with_attachments", False,
+        "allow_auto_resending_failed_messages_with_attachments",
+        False,
     )
     auto_send_failed_messages_to_propagation_node = BoolConfig(
-        "auto_send_failed_messages_to_propagation_node", False,
+        "auto_send_failed_messages_to_propagation_node",
+        False,
     )
     show_suggested_community_interfaces = BoolConfig(
-        "show_suggested_community_interfaces", True,
+        "show_suggested_community_interfaces",
+        True,
     )
     lxmf_delivery_transfer_limit_in_bytes = IntConfig(
-        "lxmf_delivery_transfer_limit_in_bytes", 1000 * 1000 * 10,
+        "lxmf_delivery_transfer_limit_in_bytes",
+        1000 * 1000 * 10,
     )  # 10MB
     lxmf_preferred_propagation_node_destination_hash = StringConfig(
-        "lxmf_preferred_propagation_node_destination_hash", None,
+        "lxmf_preferred_propagation_node_destination_hash",
+        None,
     )
     lxmf_preferred_propagation_node_auto_sync_interval_seconds = IntConfig(
-        "lxmf_preferred_propagation_node_auto_sync_interval_seconds", 0,
+        "lxmf_preferred_propagation_node_auto_sync_interval_seconds",
+        0,
     )
     lxmf_preferred_propagation_node_last_synced_at = IntConfig(
-        "lxmf_preferred_propagation_node_last_synced_at", None,
+        "lxmf_preferred_propagation_node_last_synced_at",
+        None,
     )
     lxmf_local_propagation_node_enabled = BoolConfig(
-        "lxmf_local_propagation_node_enabled", False,
+        "lxmf_local_propagation_node_enabled",
+        False,
     )
     lxmf_user_icon_name = StringConfig("lxmf_user_icon_name", None)
     lxmf_user_icon_foreground_colour = StringConfig(
-        "lxmf_user_icon_foreground_colour", None,
+        "lxmf_user_icon_foreground_colour",
+        None,
     )
     lxmf_user_icon_background_colour = StringConfig(
-        "lxmf_user_icon_background_colour", None,
+        "lxmf_user_icon_background_colour",
+        None,
     )
     lxmf_inbound_stamp_cost = IntConfig(
-        "lxmf_inbound_stamp_cost", 8,
+        "lxmf_inbound_stamp_cost",
+        8,
     )  # for direct delivery messages
     lxmf_propagation_node_stamp_cost = IntConfig(
-        "lxmf_propagation_node_stamp_cost", 16,
+        "lxmf_propagation_node_stamp_cost",
+        16,
     )  # for propagation node messages
 
 
@@ -4959,14 +5037,14 @@ class NomadnetDownloader:
         if self.request_receipt is not None:
             try:
                 self.request_receipt.cancel()
-            except Exception:  # noqa: E722
+            except Exception:
                 pass
 
         # clean up the link if we created it
         if self.link is not None:
             try:
                 self.link.teardown()
-            except Exception:  # noqa: E722
+            except Exception:
                 pass
 
         # notify that download was cancelled
@@ -4974,7 +5052,9 @@ class NomadnetDownloader:
 
     # setup link to destination and request download
     async def download(
-        self, path_lookup_timeout: int = 15, link_establishment_timeout: int = 15,
+        self,
+        path_lookup_timeout: int = 15,
+        link_establishment_timeout: int = 15,
     ):
         # check if cancelled before starting
         if self.is_cancelled:
@@ -5175,7 +5255,7 @@ class NomadnetFileDownloader(NomadnetDownloader):
             file_name: str = response[0]
             file_data: bytes = response[1]
             self.on_file_download_success(file_name, file_data)
-        except Exception:  # noqa: E722
+        except Exception:
             self.on_download_failure("unsupported_response")
 
     # page download failed, send error to provided callback
@@ -5241,7 +5321,8 @@ def main():
         help="Throws an exception. Used for testing the electron error dialog",
     )
     parser.add_argument(
-        "args", nargs=argparse.REMAINDER,
+        "args",
+        nargs=argparse.REMAINDER,
     )  # allow unknown command line args
     args = parser.parse_args()
 
@@ -5313,7 +5394,9 @@ def main():
 
     # init app
     reticulum_meshchat = ReticulumMeshChat(
-        identity, args.storage_dir, args.reticulum_config_dir,
+        identity,
+        args.storage_dir,
+        args.reticulum_config_dir,
     )
     reticulum_meshchat.run(args.host, args.port, launch_browser=args.headless is False)
 
