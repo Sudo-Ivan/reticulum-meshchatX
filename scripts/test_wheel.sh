@@ -1,0 +1,58 @@
+#!/bin/bash
+set -e
+
+WHEEL_PATH="python-dist/reticulum_meshchatx-2.41.0-py3-none-any.whl"
+
+if [ ! -f "$WHEEL_PATH" ]; then
+    echo "Error: Wheel not found at $WHEEL_PATH"
+    exit 1
+fi
+
+echo "Creating test virtual environment..."
+TEST_VENV=$(mktemp -d)/test-venv
+python3 -m venv "$TEST_VENV"
+
+echo "Installing wheel..."
+"$TEST_VENV/bin/pip" install --upgrade pip
+"$TEST_VENV/bin/pip" install "$WHEEL_PATH"
+
+echo ""
+echo "Checking installation..."
+"$TEST_VENV/bin/python" << 'PYTHON_SCRIPT'
+import meshchatx.meshchat as meshchat
+import os
+from pathlib import Path
+
+# Check if meshchat module is importable
+print(f'meshchat module location: {meshchat.__file__}')
+
+# Check if public directory exists
+meshchat_dir = os.path.dirname(meshchat.__file__)
+package_dir = os.path.dirname(os.path.dirname(meshchat_dir))
+public_path = os.path.join(package_dir, 'public')
+print(f'Checking for public at: {public_path}')
+print(f'Exists: {os.path.exists(public_path)}')
+
+# Try get_file_path
+from meshchatx.meshchat import get_file_path
+test_path = get_file_path('public')
+print(f'get_file_path("public"): {test_path}')
+print(f'Exists: {os.path.exists(test_path)}')
+
+if os.path.exists(test_path):
+    index_html = os.path.join(test_path, 'index.html')
+    print(f'index.html exists: {os.path.exists(index_html)}')
+else:
+    print('WARNING: public directory not found!')
+    print('Checking parent directories...')
+    current = package_dir
+    for i in range(3):
+        test = os.path.join(current, 'public')
+        print(f'  {test}: {os.path.exists(test)}')
+        current = os.path.dirname(current)
+PYTHON_SCRIPT
+
+echo ""
+echo "Test complete. Virtual environment at: $TEST_VENV"
+echo "To test running meshchat: $TEST_VENV/bin/meshchat --help"
+

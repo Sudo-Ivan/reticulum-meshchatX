@@ -133,6 +133,14 @@ app.whenReady().then(async () => {
             webPreferences: {
                 // used to inject logging over ipc
                 preload: path.join(__dirname, 'preload.js'),
+                // Security: disable node integration in renderer
+                nodeIntegration: false,
+                // Security: enable context isolation (default in Electron 12+)
+                contextIsolation: true,
+                // Security: enable sandbox for additional protection
+                sandbox: true,
+                // Security: disable remote module (deprecated but explicit)
+                enableRemoteModule: false,
             },
         });
 

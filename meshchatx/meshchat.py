@@ -13,7 +13,7 @@ import threading
 import time
 import webbrowser
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import LXMF
 import psutil
@@ -24,20 +24,21 @@ from LXMF import LXMRouter
 from peewee import SqliteDatabase
 from serial.tools import list_ports
 
-import database
-from src.backend.announce_handler import AnnounceHandler
-from src.backend.async_utils import AsyncUtils
-from src.backend.audio_call_manager import AudioCall, AudioCallManager
-from src.backend.colour_utils import ColourUtils
-from src.backend.interface_config_parser import InterfaceConfigParser
-from src.backend.interface_editor import InterfaceEditor
-from src.backend.lxmf_message_fields import (
+from meshchatx import database
+from meshchatx.src.backend.announce_handler import AnnounceHandler
+from meshchatx.src.backend.async_utils import AsyncUtils
+from meshchatx.src.backend.audio_call_manager import AudioCall, AudioCallManager
+from meshchatx.src.backend.colour_utils import ColourUtils
+from meshchatx.src.backend.interface_config_parser import InterfaceConfigParser
+from meshchatx.src.backend.interface_editor import InterfaceEditor
+from meshchatx.src.backend.lxmf_message_fields import (
     LxmfAudioField,
     LxmfFileAttachment,
     LxmfFileAttachmentsField,
     LxmfImageField,
 )
-from src.backend.sideband_commands import SidebandCommands
+from meshchatx.src.backend.sideband_commands import SidebandCommands
+from meshchatx.src.version import __version__ as app_version
 
 
 # NOTE: this is required to be able to pack our app with cxfreeze as an exe, otherwise it can't access bundled assets
@@ -46,9 +47,22 @@ from src.backend.sideband_commands import SidebandCommands
 def get_file_path(filename):
     if getattr(sys, "frozen", False):
         datadir = os.path.dirname(sys.executable)
-    else:
-        datadir = os.path.dirname(__file__)
-    return os.path.join(datadir, filename)
+        return os.path.join(datadir, filename)
+
+    # Running from source or an installed wheel: assets live inside the meshchatx package
+    package_dir = os.path.dirname(__file__)
+    test_path = os.path.join(package_dir, filename)
+    if os.path.exists(test_path):
+        return test_path
+
+    # Fall back to repo root when running directly from the source tree
+    repo_root = os.path.dirname(package_dir)
+    repo_path = os.path.join(repo_root, filename)
+    if os.path.exists(repo_path):
+        return repo_path
+
+    # Return the package path even if it does not exist so callers raise a clear error
+    return test_path
 
 
 class ReticulumMeshChat:
@@ -225,12 +239,10 @@ class ReticulumMeshChat:
         thread.daemon = True
         thread.start()
 
-    # gets app version from package.json
+    # gets app version from the synchronized Python version helper
     @staticmethod
     def get_app_version() -> str:
-        with open(get_file_path("package.json")) as f:
-            package_json = json.load(f)
-            return package_json["version"]
+        return app_version
 
     # automatically announces based on user config
     async def announce_loop(self):
@@ -3011,12 +3023,37 @@ class ReticulumMeshChat:
                 )
                 if message:
                     message.is_spam = is_spam
-                    message.updated_at = datetime.now(timezone.utc)
+                    message.updated_at = datetime.now(UTC)
                     message.save()
                     return web.json_response({"message": "ok"})
                 return web.json_response({"error": "Message not found"}, status=404)
             except Exception as e:
                 return web.json_response({"error": str(e)}, status=500)
+
+        # security headers middleware
+        @web.middleware
+        async def security_middleware(request, handler):
+            response = await handler(request)
+            # Add security headers to all responses
+            response.headers["X-Content-Type-Options"] = "nosniff"
+            response.headers["X-Frame-Options"] = "DENY"
+            response.headers["X-XSS-Protection"] = "1; mode=block"
+            response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+            # CSP: allow localhost for development and Electron, websockets, and blob URLs
+            csp = (
+                "default-src 'self'; "
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+                "style-src 'self' 'unsafe-inline'; "
+                "img-src 'self' data: blob:; "
+                "font-src 'self' data:; "
+                "connect-src 'self' ws://localhost:* wss://localhost:* blob:; "
+                "media-src 'self' blob:; "
+                "worker-src 'self' blob:; "
+                "object-src 'none'; "
+                "base-uri 'self';"
+            )
+            response.headers["Content-Security-Policy"] = csp
+            return response
 
         # called when web app has started
         async def on_startup(app):
@@ -3033,6 +3070,7 @@ class ReticulumMeshChat:
         # create and run web app
         app = web.Application(
             client_max_size=1024 * 1024 * 50,
+            middlewares=[security_middleware],
         )  # allow uploading files up to 50mb
         app.add_routes(routes)
         app.add_routes(
@@ -3886,7 +3924,7 @@ class ReticulumMeshChat:
             "icon_name": icon_name,
             "foreground_colour": foreground_colour,
             "background_colour": background_colour,
-            "updated_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(UTC),
         }
 
         # upsert to database
@@ -4108,7 +4146,7 @@ class ReticulumMeshChat:
             "snr": lxmf_message_dict["snr"],
             "quality": lxmf_message_dict["quality"],
             "is_spam": is_spam,
-            "updated_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(UTC),
         }
 
         # upsert to database
@@ -4144,7 +4182,7 @@ class ReticulumMeshChat:
             "rssi": rssi,
             "snr": snr,
             "quality": quality,
-            "updated_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(UTC),
         }
 
         # only set app data if provided, as we don't want to wipe existing data when we request keys from the network
@@ -4170,7 +4208,7 @@ class ReticulumMeshChat:
         data = {
             "destination_hash": destination_hash,
             "display_name": display_name,
-            "updated_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(UTC),
         }
 
         # upsert to database
@@ -4193,7 +4231,7 @@ class ReticulumMeshChat:
             "destination_hash": destination_hash,
             "display_name": display_name,
             "aspect": aspect,
-            "updated_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(UTC),
         }
 
         # upsert to database
@@ -4210,8 +4248,8 @@ class ReticulumMeshChat:
         # prepare data to insert or update
         data = {
             "destination_hash": destination_hash,
-            "last_read_at": datetime.now(timezone.utc),
-            "updated_at": datetime.now(timezone.utc),
+            "last_read_at": datetime.now(UTC),
+            "updated_at": datetime.now(UTC),
         }
 
         # upsert to database
@@ -4878,7 +4916,7 @@ class Config:
         data = {
             "key": key,
             "value": value,
-            "updated_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(UTC),
         }
 
         # upsert to database

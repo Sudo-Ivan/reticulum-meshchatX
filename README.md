@@ -14,12 +14,12 @@ A heavily customized fork of [Reticulum MeshChat](https://github.com/liamcottle/
 - [ ] Multi-language support
 - [ ] Offline Reticulum documentation tool
 - [ ] More tools (translate, LoRa calculator, LXMFy bots, etc)
-- [ ] Codebase reorginization and cleanup.
+- [x] Codebase reorganization and cleanup.
 - [ ] Tests and proper CI/CD pipeline.
 - [ ] RNS hot reload 
 - [ ] Backup/Import identities, messages and interfaces.
 - [ ] Full LXST support.
-- [ ] Move to Poetry and pyproject.toml for Python packaging.
+- [x] Move to Poetry and pyproject.toml for Python packaging.
 - [x] More stats on about page.
 - [x] Actions are pinned to full-length SHA hashes.
 - [x] Docker images are smaller and use SHA256 hashes for the images.
@@ -35,9 +35,22 @@ Check [releases](https://github.com/Sudo-Ivan/reticulum-meshchatX/releases) for 
 ## Building
 
 ```bash
-make install
+make install   # installs Python deps via Poetry and Node deps via npm
 make build
 ```
+
+You can run `make run` or `make develop` (a thin alias) to start the backend + frontend loop locally through `poetry run meshchat`.
+
+### Python packaging
+
+The Python build is driven entirely by Poetry now. Run `python scripts/sync_version.py` or `make sync-version` before packaging so `pyproject.toml` and `src/version.py` match `package.json`. After that:
+
+```bash
+python -m poetry install
+make wheel  # produces a wheel in python-dist/ that bundles the public assets
+```
+
+The wheel includes the frontend `public/` assets, `logo/`, and the CLI entry point, and `python-dist/` keeps the artifact separate from the Electron `dist/` output.
 
 ### Building in Docker
 
@@ -45,13 +58,7 @@ make build
 make docker-build
 ```
 
-The build will be in the `dist` directory.
-
-## Development
-
-```bash
-make develop
-```
+The Electron build artifacts will still live under `dist/` for releases.
 
 ## Python packaging
 

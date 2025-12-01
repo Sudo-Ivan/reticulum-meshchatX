@@ -47,11 +47,14 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install Poetry
+        run: python -m pip install --upgrade pip poetry
+
+      - name: Sync versions
+        run: python scripts/sync_version.py
+
       - name: Install Python Deps
-        run: |
-          python -m venv venv
-          venv\Scripts\pip install --upgrade pip
-          venv\Scripts\pip install -r requirements.txt
+        run: python -m poetry install
 
       - name: Install NodeJS Deps
         run: npm install
@@ -89,11 +92,14 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install Poetry
+        run: python -m pip install --upgrade pip poetry
+
+      - name: Sync versions
+        run: python scripts/sync_version.py
+
       - name: Install Python Deps
-        run: |
-          python3 -m venv venv
-          venv/bin/pip install --upgrade pip
-          venv/bin/pip install -r requirements.txt
+        run: python -m poetry install
 
       - name: Install NodeJS Deps
         run: npm install
@@ -134,11 +140,21 @@ jobs:
       - name: Install patchelf
         run: sudo apt-get update && sudo apt-get install -y patchelf
 
+      - name: Install Poetry
+        run: python -m pip install --upgrade pip poetry
+
+      - name: Sync versions
+        run: python scripts/sync_version.py
+
       - name: Install Python Deps
+        run: python -m poetry install
+
+      - name: Build Python wheel
         run: |
-          python3 -m venv venv
-          venv/bin/pip install --upgrade pip
-          venv/bin/pip install -r requirements.txt
+          python -m poetry build -f wheel
+          mkdir -p python-dist
+          mv dist/*.whl python-dist/
+          rm -rf dist
 
       - name: Install NodeJS Deps
         run: npm install
@@ -155,7 +171,7 @@ jobs:
           replacesArtifacts: true
           omitDraftDuringUpdate: true
           omitNameDuringUpdate: true
-          artifacts: "dist/*-linux.AppImage,dist/*-linux.deb"
+          artifacts: "dist/*-linux.AppImage,dist/*-linux.deb,python-dist/*.whl"
 
   build_docker:
     runs-on: ubuntu-latest
