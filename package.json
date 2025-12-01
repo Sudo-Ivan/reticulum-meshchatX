@@ -11,7 +11,8 @@
     "build": "npm run build-frontend && npm run build-backend",
     "electron-postinstall": "electron-builder install-app-deps",
     "electron": "npm run electron-postinstall && npm run build && electron .",
-    "dist": "npm run electron-postinstall && npm run build && electron-builder --publish=never"
+    "dist": "npm run electron-postinstall && npm run build && electron-builder --publish=never",
+    "dist-prebuilt": "npm run electron-postinstall && npm run build-backend && electron-builder --publish=never"
   },
   "license": "MIT",
   "engines": {

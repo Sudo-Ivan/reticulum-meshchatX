@@ -13,7 +13,7 @@ import threading
 import time
 import webbrowser
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import LXMF
 import psutil
@@ -24,31 +24,45 @@ from LXMF import LXMRouter
 from peewee import SqliteDatabase
 from serial.tools import list_ports
 
-import database
-from src.backend.announce_handler import AnnounceHandler
-from src.backend.async_utils import AsyncUtils
-from src.backend.audio_call_manager import AudioCall, AudioCallManager
-from src.backend.colour_utils import ColourUtils
-from src.backend.interface_config_parser import InterfaceConfigParser
-from src.backend.interface_editor import InterfaceEditor
-from src.backend.lxmf_message_fields import (
+from meshchatx import database
+from meshchatx.src.backend.announce_handler import AnnounceHandler
+from meshchatx.src.backend.async_utils import AsyncUtils
+from meshchatx.src.backend.audio_call_manager import AudioCall, AudioCallManager
+from meshchatx.src.backend.colour_utils import ColourUtils
+from meshchatx.src.backend.interface_config_parser import InterfaceConfigParser
+from meshchatx.src.backend.interface_editor import InterfaceEditor
+from meshchatx.src.backend.lxmf_message_fields import (
     LxmfAudioField,
     LxmfFileAttachment,
     LxmfFileAttachmentsField,
     LxmfImageField,
 )
-from src.backend.sideband_commands import SidebandCommands
+from meshchatx.src.backend.sideband_commands import SidebandCommands
+from meshchatx.src.version import __version__ as app_version
 
 
 # NOTE: this is required to be able to pack our app with cxfreeze as an exe, otherwise it can't access bundled assets
 # this returns a file path based on if we are running meshchat.py directly, or if we have packed it as an exe with cxfreeze
 # https://cx-freeze.readthedocs.io/en/latest/faq.html#using-data-files
+# bearer:disable python_lang_path_traversal
 def get_file_path(filename):
     if getattr(sys, "frozen", False):
         datadir = os.path.dirname(sys.executable)
-    else:
-        datadir = os.path.dirname(__file__)
-    return os.path.join(datadir, filename)
+        return os.path.join(datadir, filename)
+
+    # Assets live inside the meshchatx package when installed from a wheel
+    package_dir = os.path.dirname(__file__)
+    package_path = os.path.join(package_dir, filename)
+    if os.path.exists(package_path):
+        return package_path
+
+    # When running from the repository, fall back to the project root
+    repo_root = os.path.dirname(package_dir)
+    repo_path = os.path.join(repo_root, filename)
+    if os.path.exists(repo_path):
+        return repo_path
+
+    return package_path
 
 
 class ReticulumMeshChat:
@@ -225,12 +239,10 @@ class ReticulumMeshChat:
         thread.daemon = True
         thread.start()
 
-    # gets app version from package.json
+    # gets app version from the synchronized Python version helper
     @staticmethod
     def get_app_version() -> str:
-        with open(get_file_path("package.json")) as f:
-            package_json = json.load(f)
-            return package_json["version"]
+        return app_version
 
     # automatically announces based on user config
     async def announce_loop(self):
@@ -1104,10 +1116,10 @@ class ReticulumMeshChat:
                 interfaces[interface_name] = interface_details
 
             # handle SerialInterface, KISSInterface, and AX25KISSInterface
-            if (
-                interface_type == "SerialInterface"
-                or interface_type == "KISSInterface"
-                or interface_type == "AX25KISSInterface"
+            if interface_type in (
+                "SerialInterface",
+                "KISSInterface",
+                "AX25KISSInterface",
             ):
                 # ensure port provided
                 interface_port = data.get("port")
@@ -1129,10 +1141,7 @@ class ReticulumMeshChat:
                 InterfaceEditor.update_value(interface_details, data, "stopbits")
 
                 # Handle KISS and AX25KISS specific options
-                if (
-                    interface_type == "KISSInterface"
-                    or interface_type == "AX25KISSInterface"
-                ):
+                if interface_type in ("KISSInterface", "AX25KISSInterface"):
                     # set optional options
                     InterfaceEditor.update_value(interface_details, data, "preamble")
                     InterfaceEditor.update_value(interface_details, data, "txtail")
@@ -1379,7 +1388,7 @@ class ReticulumMeshChat:
                         print(e)
                 elif msg.type == WSMsgType.ERROR:
                     # ignore errors while handling message
-                    print("ws connection error %s" % websocket_response.exception())
+                    print(f"ws connection error {websocket_response.exception()}")
 
             # websocket closed
             self.websocket_clients.remove(websocket_response)
@@ -1702,7 +1711,7 @@ class ReticulumMeshChat:
                         print(e)
                 elif msg.type == WSMsgType.ERROR:
                     # ignore errors while handling message
-                    print("ws connection error %s" % websocket_response.exception())
+                    print(f"ws connection error {websocket_response.exception()}")
 
             # unregister audio packet handler now that the websocket has been closed
             audio_call.register_audio_packet_listener(on_audio_packet)
@@ -2052,9 +2061,7 @@ class ReticulumMeshChat:
 
             # check if user wants to request the path from the network right now
             request_query_param = request.query.get("request", "false")
-            should_request_now = (
-                request_query_param == "true" or request_query_param == "1"
-            )
+            should_request_now = request_query_param in ("true", "1")
             if should_request_now:
                 # determine how long we should wait for a path response
                 timeout_seconds = int(request.query.get("timeout", 15))
@@ -3011,12 +3018,37 @@ class ReticulumMeshChat:
                 )
                 if message:
                     message.is_spam = is_spam
-                    message.updated_at = datetime.now(timezone.utc)
+                    message.updated_at = datetime.now(UTC)
                     message.save()
                     return web.json_response({"message": "ok"})
                 return web.json_response({"error": "Message not found"}, status=404)
             except Exception as e:
                 return web.json_response({"error": str(e)}, status=500)
+
+        # security headers middleware
+        @web.middleware
+        async def security_middleware(request, handler):
+            response = await handler(request)
+            # Add security headers to all responses
+            response.headers["X-Content-Type-Options"] = "nosniff"
+            response.headers["X-Frame-Options"] = "DENY"
+            response.headers["X-XSS-Protection"] = "1; mode=block"
+            response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+            # CSP: allow localhost for development and Electron, websockets, and blob URLs
+            csp = (
+                "default-src 'self'; "
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+                "style-src 'self' 'unsafe-inline'; "
+                "img-src 'self' data: blob:; "
+                "font-src 'self' data:; "
+                "connect-src 'self' ws://localhost:* wss://localhost:* blob:; "
+                "media-src 'self' blob:; "
+                "worker-src 'self' blob:; "
+                "object-src 'none'; "
+                "base-uri 'self';"
+            )
+            response.headers["Content-Security-Policy"] = csp
+            return response
 
         # called when web app has started
         async def on_startup(app):
@@ -3033,6 +3065,7 @@ class ReticulumMeshChat:
         # create and run web app
         app = web.Application(
             client_max_size=1024 * 1024 * 50,
+            middlewares=[security_middleware],
         )  # allow uploading files up to 50mb
         app.add_routes(routes)
         app.add_routes(
@@ -3886,7 +3919,7 @@ class ReticulumMeshChat:
             "icon_name": icon_name,
             "foreground_colour": foreground_colour,
             "background_colour": background_colour,
-            "updated_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(UTC),
         }
 
         # upsert to database
@@ -4108,7 +4141,7 @@ class ReticulumMeshChat:
             "snr": lxmf_message_dict["snr"],
             "quality": lxmf_message_dict["quality"],
             "is_spam": is_spam,
-            "updated_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(UTC),
         }
 
         # upsert to database
@@ -4144,7 +4177,7 @@ class ReticulumMeshChat:
             "rssi": rssi,
             "snr": snr,
             "quality": quality,
-            "updated_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(UTC),
         }
 
         # only set app data if provided, as we don't want to wipe existing data when we request keys from the network
@@ -4170,7 +4203,7 @@ class ReticulumMeshChat:
         data = {
             "destination_hash": destination_hash,
             "display_name": display_name,
-            "updated_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(UTC),
         }
 
         # upsert to database
@@ -4193,7 +4226,7 @@ class ReticulumMeshChat:
             "destination_hash": destination_hash,
             "display_name": display_name,
             "aspect": aspect,
-            "updated_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(UTC),
         }
 
         # upsert to database
@@ -4210,8 +4243,8 @@ class ReticulumMeshChat:
         # prepare data to insert or update
         data = {
             "destination_hash": destination_hash,
-            "last_read_at": datetime.now(timezone.utc),
-            "updated_at": datetime.now(timezone.utc),
+            "last_read_at": datetime.now(UTC),
+            "updated_at": datetime.now(UTC),
         }
 
         # upsert to database
@@ -4878,7 +4911,7 @@ class Config:
         data = {
             "key": key,
             "value": value,
-            "updated_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(UTC),
         }
 
         # upsert to database
@@ -5022,8 +5055,8 @@ class NomadnetDownloader:
         self.path = path
         self.data = data
         self.timeout = timeout
-        self.on_download_success = on_download_success
-        self.on_download_failure = on_download_failure
+        self._download_success_callback = on_download_success
+        self._download_failure_callback = on_download_failure
         self.on_progress_update = on_progress_update
         self.request_receipt = None
         self.is_cancelled = False
@@ -5048,7 +5081,7 @@ class NomadnetDownloader:
                 pass
 
         # notify that download was cancelled
-        self.on_download_failure("cancelled")
+        self._download_failure_callback("cancelled")
 
     # setup link to destination and request download
     async def download(
@@ -5088,7 +5121,7 @@ class NomadnetDownloader:
 
         # if we still don't have a path, we can't establish a link, so bail out
         if not RNS.Transport.has_path(self.destination_hash):
-            self.on_download_failure("Could not find path to destination.")
+            self._download_failure_callback("Could not find path to destination.")
             return
 
         # check if cancelled before establishing link
@@ -5124,7 +5157,7 @@ class NomadnetDownloader:
 
         # if we still haven't established a link, bail out
         if link.status is not RNS.Link.ACTIVE:
-            self.on_download_failure("Could not establish link to destination.")
+            self._download_failure_callback("Could not establish link to destination.")
 
     # link to destination was established, we should now request the download
     def link_established(self, link):
@@ -5147,11 +5180,11 @@ class NomadnetDownloader:
 
     # handle successful download
     def on_response(self, request_receipt: RNS.RequestReceipt):
-        self.on_download_success(request_receipt)
+        self._download_success_callback(request_receipt)
 
     # handle failure
     def on_failed(self, request_receipt=None):
-        self.on_download_failure("request_failed")
+        self._download_failure_callback("request_failed")
 
     # handle download progress
     def on_progress(self, request_receipt):

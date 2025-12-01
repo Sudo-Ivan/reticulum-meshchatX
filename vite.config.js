@@ -9,23 +9,23 @@ export default {
         vuetify(),
     ],
 
-    // vite app is loaded from /src/frontend
-    root: path.join(__dirname, "src", "frontend"),
+    // vite app is loaded from /meshchatx/src/frontend
+    root: path.join(__dirname, "meshchatx", "src", "frontend"),
 
     build: {
 
-        // we want to compile vite app to /public which is bundled and served by the python executable
-        outDir: path.join(__dirname, "public"),
+        // we want to compile vite app to meshchatx/public which is bundled and served by the python executable
+        outDir: path.join(__dirname, "meshchatx", "public"),
         emptyOutDir: true,
 
         rollupOptions: {
             input: {
 
-                // we want to use /src/frontend/index.html as the entrypoint for this vite app
-                app: path.join(__dirname, "src", "frontend", "index.html"),
+                // we want to use /meshchatx/src/frontend/index.html as the entrypoint for this vite app
+                app: path.join(__dirname, "meshchatx", "src", "frontend", "index.html"),
 
-                // we want to use /src/frontend/call.html as the entrypoint for the phone call app
-                call: path.join(__dirname, "src", "frontend", "call.html"),
+                // we want to use /meshchatx/src/frontend/call.html as the entrypoint for the phone call app
+                call: path.join(__dirname, "meshchatx", "src", "frontend", "call.html"),
 
             },
             output: {

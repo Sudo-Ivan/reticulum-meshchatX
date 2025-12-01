@@ -3,9 +3,8 @@ import time
 
 import RNS
 from RNS.Interfaces.Interface import Interface
-from websockets.sync.server import Server, ServerConnection, serve
-
 from src.backend.interfaces.WebsocketClientInterface import WebsocketClientInterface
+from websockets.sync.server import Server, ServerConnection, serve
 
 
 class WebsocketServerInterface(Interface):
