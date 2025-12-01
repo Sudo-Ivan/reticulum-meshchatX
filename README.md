@@ -8,12 +8,15 @@ A heavily customized fork of [Reticulum MeshChat](https://github.com/liamcottle/
 - [x] Ability to set inbound and propagation node stamps
 - [x] Better config parsing
 - [x] Cancel page fetching or file downloads
-- [x] Block users
-- [x] Spam filter (based on keywords)
+- [x] Block recieving messages from users.
+- [ ] Spam filter (based on keywords)
 - [ ] Multi-identity support
 - [x] More stats on about page
 - [x] Actions are pinned to full-length SHA hashes.
 - [x] Docker images are smaller and use SHA256 hashes for the images.
+- [x] Electron improvements
+- [x] Latest updates for NPM and Python dependencies (bleeding edge)
+- [x] Ruff linting and Bearer SAST fixes
 
 ## Usage
 
