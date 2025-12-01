@@ -45,6 +45,3 @@ cx-freeze = ">=7.0.0"
 [[tool.poetry.include]]
 path = "logo"
 
-[[tool.poetry.include]]
-path = "scripts/sync_version.py"
-
