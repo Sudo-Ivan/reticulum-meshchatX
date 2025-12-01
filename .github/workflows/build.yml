@@ -222,8 +222,8 @@ jobs:
           cd release-assets
           echo "## SHA256 Checksums" > release-body.md
           echo "" >> release-body.md
-          
-          for file in *.exe *.dmg *.AppImage *.deb *.whl 2>/dev/null; do
+
+          for file in *.exe *.dmg *.AppImage *.deb *.whl; do
             if [ -f "$file" ]; then
               sha256sum "$file" | tee "${file}.sha256"
               echo "\`$(cat "${file}.sha256")\`" >> release-body.md
