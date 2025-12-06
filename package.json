@@ -45,7 +45,7 @@
         ]
       },
       "identity": null,
-      "artifactName": "ReticulumMeshChat-v${version}-${os}-${arch}.${ext}",
+      "artifactName": "ReticulumMeshChat-v${version}-mac-${arch}.${ext}",
       "extendInfo": {
         "NSMicrophoneUsageDescription": "Microphone access is only needed for Audio Calls",
         "com.apple.security.device.audio-input": true
