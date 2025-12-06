@@ -59,7 +59,7 @@ jobs:
         run: npm run build-frontend
 
       - name: Upload frontend artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: frontend-build
           path: meshchatx/public
@@ -79,18 +79,21 @@ jobs:
             python: "3.12"
             release_artifacts: "dist/*-win-installer.exe,dist/*-win-portable.exe"
             build_input: build_windows
+            dist_script: dist-prebuilt
           - name: mac
             os: macos-14
             node: 18
             python: "3.11"
             release_artifacts: "dist/*-mac-*.dmg"
             build_input: build_mac
+            dist_script: dist:mac-universal
           - name: linux
             os: ubuntu-latest
             node: 22
             python: "3.12"
             release_artifacts: "dist/*-linux.AppImage,dist/*-linux.deb,python-dist/*.whl"
             build_input: build_linux
+            dist_script: dist-prebuilt
     permissions:
       contents: write
     steps:
@@ -150,7 +153,7 @@ jobs:
         if: |
           github.event_name == 'push' ||
           (github.event_name == 'workflow_dispatch' && inputs[matrix.build_input] == true)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: frontend-build
           path: meshchatx/public
@@ -177,7 +180,7 @@ jobs:
         if: |
           github.event_name == 'push' ||
           (github.event_name == 'workflow_dispatch' && inputs[matrix.build_input] == true)
-        run: npm run dist-prebuilt
+        run: npm run ${{ matrix.dist_script }}
 
       - name: Upload build artifacts
         if: |
@@ -189,7 +192,7 @@ jobs:
           path: |
             dist/*-win-installer.exe
             dist/*-win-portable.exe
-            dist/*-mac.dmg
+            dist/*-mac-*.dmg
             dist/*-linux.AppImage
             dist/*-linux.deb
             python-dist/*.whl
@@ -204,7 +207,7 @@ jobs:
       contents: write
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: artifacts
 
