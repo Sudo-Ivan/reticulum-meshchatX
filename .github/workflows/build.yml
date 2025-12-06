@@ -76,7 +76,7 @@ jobs:
           - name: windows
             os: windows-latest
             node: 22
-            python: "3.12"
+            python: "3.13"
             release_artifacts: "dist/*-win-installer.exe,dist/*-win-portable.exe"
             build_input: build_windows
             dist_script: dist-prebuilt
@@ -84,8 +84,8 @@ jobs:
             electron_version: "39.2.4"
           - name: mac
             os: macos-14
-            node: 18
-            python: "3.11"
+            node: 22
+            python: "3.13"
             release_artifacts: "dist/*-mac-*.dmg"
             build_input: build_mac
             dist_script: dist:mac-universal
@@ -94,7 +94,7 @@ jobs:
           - name: linux
             os: ubuntu-latest
             node: 22
-            python: "3.12"
+            python: "3.13"
             release_artifacts: "dist/*-linux.AppImage,dist/*-linux.deb,python-dist/*.whl"
             build_input: build_linux
             dist_script: dist-prebuilt
@@ -102,8 +102,8 @@ jobs:
             electron_version: "39.2.4"
           - name: windows-legacy
             os: windows-latest
-            node: 22
-            python: "3.12"
+            node: 18
+            python: "3.11"
             release_artifacts: "dist/*-win-installer*.exe,dist/*-win-portable*.exe"
             build_input: build_windows
             dist_script: dist-prebuilt
@@ -111,8 +111,8 @@ jobs:
             electron_version: "30.0.8"
           - name: linux-legacy
             os: ubuntu-latest
-            node: 22
-            python: "3.12"
+            node: 18
+            python: "3.11"
             release_artifacts: "dist/*-linux*.AppImage,dist/*-linux*.deb,python-dist/*.whl"
             build_input: build_linux
             dist_script: dist-prebuilt
