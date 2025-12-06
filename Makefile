@@ -1,8 +1,9 @@
-.PHONY: install run develop clean build build-appimage build-exe dist sync-version wheel node_modules python build-docker run-docker
+.PHONY: install run develop clean build build-appimage build-exe dist sync-version wheel node_modules python build-docker run-docker electron-legacy build-appimage-legacy build-exe-legacy
 
 PYTHON ?= python
 POETRY = $(PYTHON) -m poetry
 NPM = npm
+LEGACY_ELECTRON_VERSION ?= 30.0.8
 
 DOCKER_COMPOSE_CMD ?= docker compose
 DOCKER_COMPOSE_FILE ?= docker-compose.yml
@@ -43,6 +44,27 @@ build-exe: build
 	$(NPM) run dist -- --win portable
 
 dist: build-appimage
+
+electron-legacy:
+	$(NPM) install --no-save electron@$(LEGACY_ELECTRON_VERSION)
+
+build-appimage-legacy: build electron-legacy
+	$(NPM) run electron-postinstall
+	$(NPM) run dist -- --linux AppImage
+	@set -e; for f in dist/*-linux.AppImage dist/*-linux.deb; do \
+		[ -e "$$f" ] || continue; \
+		dir=$$(dirname "$$f"); base=$$(basename "$$f"); ext=$${base##*.}; name=$${base%.$$ext}; \
+		mv "$$f" "$$dir/$${name}-legacy.$$ext"; \
+	done
+
+build-exe-legacy: build electron-legacy
+	$(NPM) run electron-postinstall
+	$(NPM) run dist -- --win portable
+	@set -e; for f in dist/*-win-installer.exe dist/*-win-portable.exe; do \
+		[ -e "$$f" ] || continue; \
+		dir=$$(dirname "$$f"); base=$$(basename "$$f"); ext=$${base##*.}; name=$${base%.$$ext}; \
+		mv "$$f" "$$dir/$${name}-legacy.$$ext"; \
+	done
 
 clean:
 	rm -rf node_modules
