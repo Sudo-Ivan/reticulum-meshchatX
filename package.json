@@ -12,7 +12,9 @@
     "electron-postinstall": "electron-builder install-app-deps",
     "electron": "npm run electron-postinstall && npm run build && electron .",
     "dist": "npm run electron-postinstall && npm run build && electron-builder --publish=never",
-    "dist-prebuilt": "npm run electron-postinstall && npm run build-backend && electron-builder --publish=never"
+    "dist-prebuilt": "npm run electron-postinstall && npm run build-backend && electron-builder --publish=never",
+    "dist:mac-arm64": "npm run electron-postinstall && npm run build && electron-builder --mac --arm64 --publish=never",
+    "dist:mac-universal": "npm run electron-postinstall && npm run build && electron-builder --mac --universal --publish=never"
   },
   "license": "MIT",
   "engines": {
@@ -36,9 +38,15 @@
       "buildResources": "electron/build"
     },
     "mac": {
-      "target": "dmg",
+      "target": {
+        "target": "dmg",
+        "arch": [
+          "universal"
+        ]
+      },
       "identity": null,
-      "artifactName": "ReticulumMeshChat-v${version}-${os}.${ext}",
+      "artifactName": "ReticulumMeshChat-v${version}-mac-${arch}.${ext}",
+      "x64ArchFiles": "Contents/Resources/app/electron/build/exe/**",
       "extendInfo": {
         "NSMicrophoneUsageDescription": "Microphone access is only needed for Audio Calls",
         "com.apple.security.device.audio-input": true
