@@ -1,6 +1,6 @@
 {
   "name": "reticulum-meshchatx",
-  "version": "2.41.0",
+  "version": "2.50.0",
   "description": "A simple mesh network communications app powered by the Reticulum Network Stack",
   "author": "Sudo-Ivan",
   "main": "electron/main.js",
