@@ -48,23 +48,16 @@ dist: build-appimage
 electron-legacy:
 	$(NPM) install --no-save electron@$(LEGACY_ELECTRON_VERSION)
 
+# Legacy targets intended for manual/local builds; CI uses workflow jobs.
 build-appimage-legacy: build electron-legacy
 	$(NPM) run electron-postinstall
 	$(NPM) run dist -- --linux AppImage
-	@set -e; for f in dist/*-linux.AppImage dist/*-linux.deb; do \
-		[ -e "$$f" ] || continue; \
-		dir=$$(dirname "$$f"); base=$$(basename "$$f"); ext=$${base##*.}; name=$${base%.$$ext}; \
-		mv "$$f" "$$dir/$${name}-legacy.$$ext"; \
-	done
+	./scripts/rename_legacy_artifacts.sh
 
 build-exe-legacy: build electron-legacy
 	$(NPM) run electron-postinstall
 	$(NPM) run dist -- --win portable
-	@set -e; for f in dist/*-win-installer.exe dist/*-win-portable.exe; do \
-		[ -e "$$f" ] || continue; \
-		dir=$$(dirname "$$f"); base=$$(basename "$$f"); ext=$${base##*.}; name=$${base%.$$ext}; \
-		mv "$$f" "$$dir/$${name}-legacy.$$ext"; \
-	done
+	./scripts/rename_legacy_artifacts.sh
 
 clean:
 	rm -rf node_modules
