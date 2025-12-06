@@ -36,7 +36,7 @@ dependencies = [
 meshchat = "meshchatx.meshchat:main"
 
 [tool.poetry]
-version = "2.41.0"
+version = "2.50.0"
 packages = [{include = "meshchatx"}]
 
 [tool.poetry.group.dev.dependencies]
