@@ -46,6 +46,9 @@
       },
       "identity": null,
       "artifactName": "ReticulumMeshChat-v${version}-mac-${arch}.${ext}",
+      "x64ArchFiles": [
+        "Contents/Resources/app/electron/build/exe/ReticulumMeshChatX"
+      ],
       "extendInfo": {
         "NSMicrophoneUsageDescription": "Microphone access is only needed for Audio Calls",
         "com.apple.security.device.audio-input": true
