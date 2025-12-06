@@ -80,6 +80,8 @@ jobs:
             release_artifacts: "dist/*-win-installer.exe,dist/*-win-portable.exe"
             build_input: build_windows
             dist_script: dist-prebuilt
+            variant: standard
+            electron_version: "39.2.4"
           - name: mac
             os: macos-14
             node: 18
@@ -87,6 +89,8 @@ jobs:
             release_artifacts: "dist/*-mac-*.dmg"
             build_input: build_mac
             dist_script: dist:mac-universal
+            variant: standard
+            electron_version: "39.2.4"
           - name: linux
             os: ubuntu-latest
             node: 22
@@ -94,6 +98,26 @@ jobs:
             release_artifacts: "dist/*-linux.AppImage,dist/*-linux.deb,python-dist/*.whl"
             build_input: build_linux
             dist_script: dist-prebuilt
+            variant: standard
+            electron_version: "39.2.4"
+          - name: windows-legacy
+            os: windows-latest
+            node: 22
+            python: "3.12"
+            release_artifacts: "dist/*-win-installer*.exe,dist/*-win-portable*.exe"
+            build_input: build_windows
+            dist_script: dist-prebuilt
+            variant: legacy
+            electron_version: "30.0.8"
+          - name: linux-legacy
+            os: ubuntu-latest
+            node: 22
+            python: "3.12"
+            release_artifacts: "dist/*-linux*.AppImage,dist/*-linux*.deb,python-dist/*.whl"
+            build_input: build_linux
+            dist_script: dist-prebuilt
+            variant: legacy
+            electron_version: "30.0.8"
     permissions:
       contents: write
     steps:
@@ -102,6 +126,16 @@ jobs:
           github.event_name == 'push' ||
           (github.event_name == 'workflow_dispatch' && inputs[matrix.build_input] == true)
         uses: actions/checkout@50fbc622fc4ef5163becd7fab6573eac35f8462e # v1
+
+      - name: Set legacy Electron version
+        if: |
+          matrix.variant == 'legacy' &&
+          (github.event_name == 'push' ||
+          (github.event_name == 'workflow_dispatch' && inputs[matrix.build_input] == true))
+        shell: bash
+        run: |
+          node -e "const fs=require('fs');const pkg=require('./package.json');pkg.devDependencies.electron='${{ matrix.electron_version }}';fs.writeFileSync('package.json', JSON.stringify(pkg,null,2));"
+          if [ -f package-lock.json ]; then rm package-lock.json; fi
 
       - name: Install NodeJS
         if: |
@@ -160,14 +194,14 @@ jobs:
 
       - name: Install patchelf
         if: |
-          matrix.name == 'linux' &&
+          startsWith(matrix.name, 'linux') &&
           (github.event_name == 'push' ||
           (github.event_name == 'workflow_dispatch' && inputs[matrix.build_input] == true))
         run: sudo apt-get update && sudo apt-get install -y patchelf
 
       - name: Build Python wheel
         if: |
-          matrix.name == 'linux' &&
+          startsWith(matrix.name, 'linux') &&
           (github.event_name == 'push' ||
           (github.event_name == 'workflow_dispatch' && inputs[matrix.build_input] == true))
         run: |
@@ -182,6 +216,23 @@ jobs:
           (github.event_name == 'workflow_dispatch' && inputs[matrix.build_input] == true)
         run: npm run ${{ matrix.dist_script }}
 
+      - name: Rename artifacts for legacy build
+        if: |
+          matrix.variant == 'legacy' &&
+          (github.event_name == 'push' ||
+          (github.event_name == 'workflow_dispatch' && inputs[matrix.build_input] == true))
+        shell: bash
+        run: |
+          shopt -s nullglob
+          for f in dist/*-win-installer.exe dist/*-win-portable.exe dist/*-linux.AppImage dist/*-linux.deb; do
+            [ -e "$f" ] || continue
+            dir=$(dirname "$f")
+            base=$(basename "$f")
+            ext="${base##*.}"
+            name="${base%.$ext}"
+            mv "$f" "$dir/${name}-legacy.${ext}"
+          done
+
       - name: Upload build artifacts
         if: |
           github.event_name == 'push' ||
@@ -190,11 +241,11 @@ jobs:
         with:
           name: build-${{ matrix.name }}
           path: |
-            dist/*-win-installer.exe
-            dist/*-win-portable.exe
+            dist/*-win-installer*.exe
+            dist/*-win-portable*.exe
             dist/*-mac-*.dmg
-            dist/*-linux.AppImage
-            dist/*-linux.deb
+            dist/*-linux*.AppImage
+            dist/*-linux*.deb
             python-dist/*.whl
           if-no-files-found: ignore
 
