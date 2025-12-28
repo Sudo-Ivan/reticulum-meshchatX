@@ -1,3 +1,5 @@
+Moved to https://git.quad4.io/RNS-Things/reticulum-meshchatX
+
 # Reticulum MeshChatX
 
 A heavily customized fork of [Reticulum MeshChat](https://github.com/liamcottle/reticulum-meshchat), any meaningful, stable and tested modifications will be submitted as a PR upstream. 
